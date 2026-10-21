@@ -1,6 +1,6 @@
 # kennel: design
 
-Launcher for Linux handhelds, first target goodluckOS on the GA36-MB A23 unit (640x480, Mali-400 with Mesa lima, 494 MB RAM, dual Cortex-A7 at 1008 MHz). Developed as a standalone project; goodluckOS support is a platform profile and Puppy compatibility, so a different base system needs a new profile only. Usage and file reference: [../README.md](../README.md).
+Launcher for Linux handhelds, first target goodluckOS on the GA36-MB A23 unit (640x480, Mali-400 with Mesa lima, 494 MB RAM, dual Cortex-A7 at 1008 MHz). Developed as a standalone project; goodluckOS support is a platform profile and Puppy compatibility, so a different base system needs a new profile only. Usage and file reference: [REFERENCE.md](REFERENCE.md).
 
 ## 1. Goals
 
@@ -35,7 +35,7 @@ The cross build (`scripts/build.sh armhf`) links libstdc++ statically and checks
 
 ## 3. Platform integration
 
-`platforms/<id>.ini`, selected by `ID` in `/etc/os-release` or `KENNEL_PLATFORM` (an id, or a path containing `/`), searched in `<exe dir>/platforms` and `<exe dir>/../share/kennel/platforms`. Keys: README, section "Platform profiles". `tail_categories` places system and tool categories (goodluckOS: Emulators/Frontends, Terminal, System) after the game categories.
+`platforms/<id>.ini`, selected by `ID` in `/etc/os-release` or `KENNEL_PLATFORM` (an id, or a path containing `/`), searched in `<exe dir>/platforms` and `<exe dir>/../share/kennel/platforms`. Keys: REFERENCE.md, section "Platform profiles". `tail_categories` places system and tool categories (goodluckOS: Emulators/Frontends, Terminal, System) after the game categories.
 
 Launch modes:
 
@@ -123,7 +123,7 @@ The stick uses hysteresis (press at half travel, release at a quarter) so a stic
 
 Rows on Home: Continue (last 20 played), Favorites (by title), then the categories in the user order (Settings > Categories, X/Y move), minus hidden ones (platform `hide_categories` until the user changes the list). Empty rows are not shown. Sort within categories: Name (file order for entries, name order for archives, as Puppy), Last played, Play time.
 
-Parser: as Puppy (README, "Library: .puppy files"), plus diagnostics with file and line for ignored sections and replaced definitions, shown in expert mode.
+Parser: as Puppy (REFERENCE.md, "Library: .puppy files"), plus diagnostics with file and line for ignored sections and replaced definitions, shown in expert mode.
 
 Art lookup per entry: `ART`, `ART_DIRECTORIES` and `ENTRY_ICONS_DIRECTORIES` (each directory listed once into a stem index, png before jpg before jpeg, exact stem before case-insensitive), `ICON`. Archive entries without an image get a stock card over `DEFAULT_ICON`; category images also come from `system_icons/<category>.png`.
 
@@ -160,7 +160,7 @@ Launch: overlay with the card and title fades in (180 ms), then the platform lau
 
 Autolaunch entries written by kennel use the same wrapper, so sessions started at boot are counted too.
 
-On start, kennel increments its boot counter when `/proc/sys/kernel/random/boot_id` changed, then folds the journal into `sessions.tsv` (cases in the README, section "Statistics") and truncates it. Entry statistics (launches, total time, first wall time, last session) are recomputed from `sessions.tsv` on load; resetting an entry rewrites the file without its sessions.
+On start, kennel increments its boot counter when `/proc/sys/kernel/random/boot_id` changed, then folds the journal into `sessions.tsv` (cases in REFERENCE.md, section "Statistics") and truncates it. Entry statistics (launches, total time, first wall time, last session) are recomputed from `sessions.tsv` on load; resetting an entry rewrites the file without its sessions.
 
 After a return, a session that ended with a status other than 0, 130 (SIGINT) or 143 (SIGTERM, user stop), and was not killed, opens a dialog with the exit code or signal and a link to the app log ("Report app errors" setting).
 
@@ -265,7 +265,7 @@ Tweens (`anim::Tween`) animate floats with `outCubic` or `inOutQuad`; durations 
 | toast | 12 px drop, alpha; 3.2 s visible | 200 ms |
 | launch | dim, card scale 0.92 to 1 | 180 ms |
 
-`KENNEL_AUTOMATE` (README, "Testing") feeds logical keys and screenshot requests into the main loop for offscreen host runs.
+`KENNEL_AUTOMATE` (REFERENCE.md, "Testing") feeds logical keys and screenshot requests into the main loop for offscreen host runs.
 
 ## 12. Source layout
 

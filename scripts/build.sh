@@ -2,12 +2,13 @@
 # Builds kennel. Usage: scripts/build.sh [host|armhf|all]   (default host)
 #   host   native build in build/host (Arch: sdl3, sdl3_ttf, alsa-lib)
 #   armhf  cross build in build/armhf against the Debian trixie sysroot (scripts/sysroot.sh),
-#          then checks the binary's dynamic symbols against the goodluckOS rootfs in GLOS_ROOT
+#          then, when GLOS_ROOT is set, checks the binaries' dynamic symbols against that goodluckOS
+#          rootfs
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
 target=${1:-host}
-glos_root=${GLOS_ROOT:-/mnt/ext/r36s/goodluck/glos-root}
+glos_root=${GLOS_ROOT:-}
 
 build_host() {
     cmake -G Ninja -S "$repo" -B "$repo/build/host" -DCMAKE_BUILD_TYPE=Release
@@ -52,12 +53,12 @@ build_armhf() {
     cmake -G Ninja -S "$repo" -B "$repo/build/armhf" -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_TOOLCHAIN_FILE="$repo/cmake/armhf-linux.cmake" -DKENNEL_STATIC_CXX=ON
     ninja -C "$repo/build/armhf"
-    if [[ -d $glos_root ]]; then
+    if [[ -n $glos_root && -d $glos_root ]]; then
         for bin in kennel kennel-read kennel-term; do
             check_symbols "$repo/build/armhf/$bin" "$glos_root"
         done
     else
-        echo "symbol check skipped: $glos_root missing"
+        echo "symbol check skipped: GLOS_ROOT not set or missing"
     fi
 }
 

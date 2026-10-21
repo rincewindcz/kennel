@@ -160,7 +160,7 @@ void Term::type(const std::string& text, bool ctrl) {
         if (code == 0x03 || code == 0x15) {
             line_.clear();
             lineKnown_ = true;
-        } else {
+        } else if (code != 0x0c) {  // Ctrl-L only redraws the line
             lineKnown_ = false;
         }
         suggestionsDirty_ = true;

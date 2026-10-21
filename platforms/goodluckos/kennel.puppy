@@ -1,0 +1,7 @@
+# Starts kennel from Puppy, for the first run: then Settings > Launcher at boot. kennel hides the
+# System category on its own Home. Installed to ~/.local/share/applications/kennel.puppy.
+[ENTRY]
+CATEGORY=System
+NAME=kennel
+DESCRIPTION=kennel launcher
+COMMAND=/home/player/ports/kennel/kennel

@@ -3,11 +3,11 @@
 # .puppy files and icons, the HOME .puppy files of the goodluck ports, empty ROM files, a few
 # generated per-ROM images and the kennel-read test books. Launch commands point at device paths
 # and fail on the host.
-# Environment: GOODLUCK (default /mnt/ext/r36s/goodluck)
+# Environment: GOODLUCK (required: goodluck tree with glos-root/, out/ and the port folders)
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
-goodluck=${GOODLUCK:-/mnt/ext/r36s/goodluck}
+goodluck=${GOODLUCK:?set GOODLUCK to the goodluck tree}
 root=$repo/build/testroot
 home=$root/home/player
 
@@ -51,8 +51,8 @@ art "$home/roms/gba/icons/Metroid Fusion (USA).png" 240x160 '#6a4c93' '#1982c4' 
 "$repo/scripts/testbooks.sh" >/dev/null
 mkdir -p "$home/books"
 cp "$repo"/build/testbooks/* "$home/books/"
-# Optional local extra: own books with covers (KENNEL_TEST_BOOKS, default ~/Documents/ebooks).
-extra=${KENNEL_TEST_BOOKS:-$HOME/Documents/ebooks}
+# Optional: own books with covers (KENNEL_TEST_BOOKS).
+extra=${KENNEL_TEST_BOOKS:-}
 if [[ -d $extra ]]; then
     find "$extra" -maxdepth 1 -type f \( -iname '*.epub' -o -iname '*.fb2' -o -iname '*.mobi' \) -exec cp {} "$home/books/" \;
 fi

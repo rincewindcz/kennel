@@ -1,7 +1,7 @@
 #!/bin/bash
 # Stages the armhf build for goodluckOS as a HOME tree in build/stage-glos and packs it as
 # build/kennel-glos.zip (unzip into the HOME root): kennel, kennel-read, kennel-term, the Books and
-# Terminal entries and an empty books folder. The launcher script is not included:
+# Terminal entries, the kennel entry for starting it from Puppy and an empty books folder. The launcher script is not included:
 # switch launchers in Settings > Launcher at boot, or install tools/launcher-glos.sh.
 set -euo pipefail
 
@@ -24,7 +24,7 @@ cp -r "$repo/assets/icons/20" "$repo/assets/icons/32" "$dest/assets/icons/"
 cp "$repo/assets/icons/LICENSE-lucide.txt" "$dest/assets/icons/"
 cp "$repo/platforms/goodluckos.ini" "$dest/platforms/"
 mkdir -p "$stage/.local/share/applications" "$stage/books"
-cp "$repo/platforms/goodluckos/books.puppy" "$repo/platforms/goodluckos/terminal.puppy" "$stage/.local/share/applications/"
+cp "$repo/platforms/goodluckos/"{books,terminal,kennel}.puppy "$stage/.local/share/applications/"
 
 (cd "$stage" && zip -qr "$repo/build/kennel-glos.zip" ports .local books)
 echo "staged $stage, packed build/kennel-glos.zip ($(du -h "$repo/build/kennel-glos.zip" | cut -f1))"
