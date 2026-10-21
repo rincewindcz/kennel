@@ -2,6 +2,7 @@
 #include <cstring>
 
 #include "book.h"
+#include "reader.h"
 
 // kennel-read BOOK              reads a book
 // kennel-read --dump BOOK       prints the parsed book (development)
@@ -9,7 +10,9 @@ int main(int argc, char** argv) {
     if (argc == 3 && !strcmp(argv[1], "--dump")) {
         Book b;
         std::string err;
-        if (!loadBook(argv[2], b, err)) {
+        bool ok = loadBook(argv[2], b, err);
+        flushBookCache();
+        if (!ok) {
             fprintf(stderr, "%s\n", err.c_str());
             return 1;
         }
@@ -22,6 +25,10 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
-    fprintf(stderr, "usage: kennel-read BOOK | --dump BOOK\n");
-    return 2;
+    if (argc != 2 || argv[1][0] == '-') {
+        fprintf(stderr, "usage: kennel-read BOOK | --dump BOOK\n");
+        return 2;
+    }
+    static Reader reader;
+    return reader.run(argc, argv);
 }

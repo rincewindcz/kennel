@@ -1,0 +1,10 @@
+# kennel-read entry for goodluckOS: every book in the folders below appears in the Books category
+# and opens in kennel-read. Installed to ~/.local/share/applications/books.puppy.
+[ARCHIVE]
+NAME=Books
+DESCRIPTION=E-books
+ENTRY_DIRECTORIES=/home/player/books;/media/external/books
+ENTRY_EXTENSIONS=epub;pdb;mobi;prc;fb2;html;htm;xhtml;txt
+ENTRY_ICONS_DIRECTORIES=/home/player/books/icons;/media/external/books/icons
+COMMAND=/home/player/ports/kennel/kennel-read %s
+COLOR=#8a6d3b

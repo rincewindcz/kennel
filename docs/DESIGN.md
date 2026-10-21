@@ -27,7 +27,8 @@ Non-goals: scraping (the device has no network), video previews, touch input.
 | Shapes | 9-grid textures with analytic anti-aliased masks (rounded rects, rings, soft shadows; shadow blur rounded to 4 px steps so few masks exist), vertex-colour gradients, background glow from one 64x64 radial texture | no extra library, sharp at any size; a large shadow mask cost about 40 ms to build on the device |
 | Audio mixer | libasound simple mixer (optional, `KENNEL_ALSA`) | volume, mute, speaker switch |
 | Icons | Lucide (ISC) SVGs rasterized to white PNGs at 20 and 32 px by `scripts/icons.sh`, tinted at draw time | no SVG code on the device |
-| Fonts | Inter Regular, SemiBold, Bold; JetBrains Mono for logs; platform fallback fonts for CJK | the device has no monospace font |
+| Fonts | Inter Regular, SemiBold, Bold; JetBrains Mono for logs; platform fallback fonts for CJK; kennel-read: Literata and Inter in Regular, Italic, Bold, BoldItalic (`assets/fonts/read`) | the device has no monospace font; Literata is a reading serif with static styles |
+| Books | zlib for EPUB (zip, deflate); own tolerant markup tokenizer for XHTML, OPF, NCX, FB2 and MOBI HTML | zlib is on the device; no XML library needed for broken markup |
 | Config, data | INI (`kennel.ini`), TSV (`sessions.tsv`), plain lists (`favorites`) | readable and editable over MTP |
 
 The cross build (`scripts/build.sh armhf`) links libstdc++ statically and checks every undefined dynamic symbol against the libraries of the goodluckOS rootfs.
@@ -263,7 +264,8 @@ Tweens (`anim::Tween`) animate floats with `outCubic` or `inOutQuad`; durations 
 
 ```
 CMakeLists.txt, cmake/armhf-linux.cmake
-src/
+src/                       kennelcore (static library shared with kennel-read): anim, util, ini, paths,
+                           platform, settings, image, gfx, input, menu
   main.cpp                 entry point
   app.*                    screen stack, main loop, bars, dock, toasts, launch, system actions
   anim.h                   frame clock, tweens
@@ -275,13 +277,17 @@ src/
   stats.*                  journal, sessions, favorites
   image.*, art.*           decoding, scaling, QOI cache, worker, stock cards
   system.*, procs.*        battery, backlight, mixer, mounts, USB; /proc sampler
-  widgets.*                menu, menu page, dialog, background, page header
+  menu.*                   menu widget, menu items, scrollbar, accent colour
+  widgets.*                menu page, dialog, background, page header
   home.*, details.*, panels.*, menus.cpp, expert.*, statsview.cpp
+  read/                    kennel-read: book model (book.*), format loaders (txt, epub, html, fb2, pdb),
+                           text layout, glyph atlas, reader screens
 third_party/               stb_image.h, qoi.h
-assets/                    fonts, icons (svg sources, 20 and 32 px PNGs)
-platforms/                 goodluckos.ini
+assets/                    fonts (reading fonts in fonts/read), icons (svg sources, 20 and 32 px PNGs)
+platforms/                 goodluckos.ini, goodluckos/books.puppy (Books entry)
 tools/                     kennel-run, launcher-glos.sh, padinject.c (device test input)
-scripts/                   sysroot.sh, build.sh, icons.sh, testroot.sh, stage-glos.sh, deploy-glos.sh
+scripts/                   sysroot.sh, build.sh, icons.sh, testroot.sh, stage-glos.sh, deploy-glos.sh,
+                           testbooks.sh, mkbooks.py (FB2, PalmDOC and MOBI test books)
 ```
 
 ## 13. Device facts (goodluckOS, checked 2026-10-21)
@@ -294,3 +300,44 @@ scripts/                   sysroot.sh, build.sh, icons.sh, testroot.sh, stage-gl
 | Kernel log | `dmesg_restrict` 0 |
 | UDC | `musb-hdrc.2.auto`, `configured` with a PC attached |
 | Launcher command | `/home/player/.local/launcher.sh`, run by appd as `player` via `su -l` |
+
+## 14. kennel-read
+
+E-book reader built from the same repository (`kennel-read`), sharing kennelcore: graphics helpers, input, menus and `kennel.ini` (accent colour, confirm button). Goals: one consistent user-set font, scrolling by lines, no images and no effects, progress, the common text formats.
+
+### 14.1 Book model
+
+`src/read/book.h`: a book is a list of paragraphs (`Body`, `Heading`, `Break`) of UTF-8 text with single spaces and optional style runs (bold, italic, byte ranges), plus chapters (title, first paragraph), title, author and format. `Book::finish()` normalizes whitespace, drops empty paragraphs, collapses repeated breaks, falls back to headings when a format has no table of contents, and computes the byte offset of every paragraph. A reading position is a byte offset into the concatenated text, so it survives changes of font, size, margins and alignment.
+
+| Format | Source of structure |
+|---|---|
+| TXT | UTF-8 only (a BOM is skipped); paragraphs are blank-line separated blocks when the file has them, otherwise lines |
+| EPUB | `META-INF/container.xml`, OPF spine and metadata, EPUB 3 nav or NCX table of contents; XHTML reduced to paragraphs |
+| HTML, XHTML | block elements become paragraphs, `h1` to `h6` headings, `i`/`em` and `b`/`strong` style runs; `script`, `style`, images dropped |
+| FB2 | `title-info` metadata, `section`/`title` chapters, `emphasis`/`strong`, `empty-line` breaks; `binary` skipped |
+| PDB, MOBI | PDB records; PalmDOC (TEXtREAd) text, or MOBI (BOOKMOBI) HTML without DRM, PalmDOC-compressed or uncompressed, trailing record entries removed |
+
+### 14.2 Reading
+
+Text is laid out in lines on a uniform grid (line height times line spacing), so scrolling moves by whole lines: Up/Down one line with the shared key repeat (350 ms delay, 60 ms, 30 ms after 2 s), Left/Right and L1/R1 one screen, L2/R2 to the previous or next chapter, SELECT the chapter list, START the settings panel, B saves and exits. Nothing animates. A thin status bar shows the chapter and the progress in percent.
+
+| Setting | Values |
+|---|---|
+| Font | Literata, Inter |
+| Size | 14 to 36 |
+| Line spacing | 1.0 to 2.0 |
+| Margins | narrow, normal, wide |
+| Alignment | left, justified |
+| Formatting | plain (one style), styled (bold headings, italic and bold runs) |
+| Paragraphs | first-line indent, spacing (blank line) |
+| Theme | dark, sepia, light |
+| Status bar | on, off |
+| Brightness | platform backlight |
+
+Files: `~/.config/kennel/read.ini` (settings), `~/.local/share/kennel/read/positions.tsv` (position per book path).
+
+### 14.3 goodluckOS
+
+`platforms/goodluckos/books.puppy` is installed to `~/.local/share/applications/`: an `[ARCHIVE]` named Books over `~/books` and `/media/external/books` with the extensions above, opening `ports/kennel/kennel-read %s`. kennel shows the books as the Books category (glyph `book-open`), records reading time like play time, and lists recently read books in Continue.
+
+Test books: `scripts/testbooks.sh` (Project Gutenberg EPUB, TXT and HTML, including a Czech book; FB2, PalmDOC PDB and MOBI generated by `scripts/mkbooks.py`).

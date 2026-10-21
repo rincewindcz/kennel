@@ -44,7 +44,7 @@ check_symbols() {
         echo "$missing" >&2
         return 1
     fi
-    echo "symbol check: $(wc -l <"$undefined") symbols resolved against $root"
+    echo "symbol check: $(basename "$bin"): $(wc -l <"$undefined") symbols resolved against $root"
 }
 
 build_armhf() {
@@ -53,7 +53,9 @@ build_armhf() {
         -DCMAKE_TOOLCHAIN_FILE="$repo/cmake/armhf-linux.cmake" -DKENNEL_STATIC_CXX=ON
     ninja -C "$repo/build/armhf"
     if [[ -d $glos_root ]]; then
-        check_symbols "$repo/build/armhf/kennel" "$glos_root"
+        for bin in kennel kennel-read; do
+            check_symbols "$repo/build/armhf/$bin" "$glos_root"
+        done
     else
         echo "symbol check skipped: $glos_root missing"
     fi

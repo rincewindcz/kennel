@@ -1,7 +1,8 @@
 #!/bin/bash
 # Builds build/testroot, a goodluckOS-like tree for running the host build: the device's system
-# .puppy files and icons, the HOME .puppy files of the goodluck ports, empty ROM files and a few
-# generated per-ROM images. Launch commands point at device paths and fail on the host.
+# .puppy files and icons, the HOME .puppy files of the goodluck ports, empty ROM files, a few
+# generated per-ROM images and the kennel-read test books. Launch commands point at device paths
+# and fail on the host.
 # Environment: GOODLUCK (default /mnt/ext/r36s/goodluck)
 set -euo pipefail
 
@@ -46,9 +47,15 @@ art "$home/roms/snes/icons/Chrono Trigger (USA).jpg" 960x640 '#2a9d8f' '#264653'
 art "$home/roms/snes/icons/F-Zero (USA).png" 128x128 '#ffb703' '#fb8500' 'F'
 art "$home/roms/gba/icons/Metroid Fusion (USA).png" 240x160 '#6a4c93' '#1982c4' 'FUSION'
 
+# Books for kennel-read (scripts/testbooks.sh), shown by the Books entry.
+"$repo/scripts/testbooks.sh" >/dev/null
+mkdir -p "$home/books"
+cp "$repo"/build/testbooks/* "$home/books/"
+cp "$repo/platforms/goodluckos/books.puppy" "$home/.local/share/applications/"
+
 cat <<MSG
 testroot ready: $root
 run the host build with:
   env -u XDG_CONFIG_HOME -u XDG_DATA_HOME -u XDG_CACHE_HOME KENNEL_ROOT=$root HOME=$home \\
-      KENNEL_ASSETS=$repo/assets KENNEL_PLATFORM=goodluckos $repo/build/host/kennel
+      KENNEL_PLATFORM=goodluckos $repo/build/host/kennel
 MSG

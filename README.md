@@ -2,6 +2,8 @@
 
 Game and app launcher for Linux handhelds with a 640x480 screen and a gamepad. Written in C++20 on SDL3 and SDL3_ttf. First target: goodluckOS on the GA36-MB (R36S clone, Allwinner A23, Mali-400), where it replaces Puppy and reads the same `.puppy` files. Device integration lives in platform profiles (`platforms/*.ini`), so other systems need a profile, not code changes.
 
+The repository also builds `kennel-read`, a minimal e-book reader (section "kennel-read").
+
 Design and implementation notes: [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Features
@@ -37,19 +39,19 @@ Up/down switch categories on Home. Global hotkeys of the system (goodluckOS: STA
 
 ## Build
 
-Requirements: CMake, Ninja, clang and lld (cross build), Arch packages `sdl3`, `sdl3_ttf`, `alsa-lib` (host build). Icons are rasterized PNGs in `assets/icons/{20,32}`; `scripts/icons.sh` regenerates them from `assets/icons/svg` with `rsvg-convert`.
+Requirements: CMake, Ninja, clang and lld (cross build), Arch packages `sdl3`, `sdl3_ttf`, `alsa-lib`, `zlib` (host build). Icons are rasterized PNGs in `assets/icons/{20,32}`; `scripts/icons.sh` regenerates them from `assets/icons/svg` with `rsvg-convert`.
 
 ```sh
-scripts/build.sh host     # build/host/kennel
-scripts/build.sh armhf    # build/armhf/kennel, armv7-a hard float, static libstdc++
+scripts/build.sh host     # build/host/kennel, build/host/kennel-read
+scripts/build.sh armhf    # build/armhf/{kennel,kennel-read}, armv7-a hard float, static libstdc++
 scripts/build.sh all
 ```
 
-`armhf` first runs `scripts/sysroot.sh`, which assembles `build/sysroot-armhf` from Debian trixie armhf packages (glibc, libstdc++ 14, SDL3 3.2, SDL3_ttf 3.2, ALSA); the package index signature is checked with `debian-archive-keyring` when installed, packages by SHA256. The binary links only glibc, SDL3, SDL3_ttf and ALSA dynamically. After the build, every undefined dynamic symbol is checked against the libraries of the goodluckOS rootfs in `GLOS_ROOT` (default `/mnt/ext/r36s/goodluck/glos-root`); a missing symbol fails the build. CMake options: `KENNEL_ALSA` (default on), `KENNEL_STATIC_CXX` (default off, on for `armhf`).
+`armhf` first runs `scripts/sysroot.sh`, which assembles `build/sysroot-armhf` from Debian trixie armhf packages (glibc, libstdc++ 14, SDL3 3.2, SDL3_ttf 3.2, ALSA, zlib); the package index signature is checked with `debian-archive-keyring` when installed, packages by SHA256. `kennel` links only glibc, SDL3, SDL3_ttf and ALSA dynamically, `kennel-read` glibc, SDL3, SDL3_ttf and zlib. After the build, every undefined dynamic symbol of both binaries is checked against the libraries of the goodluckOS rootfs in `GLOS_ROOT` (default `/mnt/ext/r36s/goodluck/glos-root`); a missing symbol fails the build. CMake options: `KENNEL_ALSA` (default on), `KENNEL_STATIC_CXX` (default off, on for `armhf`).
 
 ## Run on the host
 
-`scripts/testroot.sh` builds `build/testroot`: the goodluckOS system `.puppy` files and icons, the HOME `.puppy` files of the goodluck ports, empty ROM files and a few generated ROM images. It prints the command line:
+`scripts/testroot.sh` builds `build/testroot`: the goodluckOS system `.puppy` files and icons, the HOME `.puppy` files of the goodluck ports, empty ROM files, a few generated ROM images, and the test books of `scripts/testbooks.sh` in `home/player/books` with the Books entry. It prints the command line:
 
 ```sh
 env -u XDG_CONFIG_HOME -u XDG_DATA_HOME -u XDG_CACHE_HOME -u XDG_RUNTIME_DIR \
@@ -73,7 +75,7 @@ scripts/build.sh armhf
 scripts/stage-glos.sh        # build/stage-glos, build/kennel-glos.zip
 ```
 
-Unzip `kennel-glos.zip` into the HOME root (MTP: `GA36MB -> HOME`). It contains `ports/kennel/` only: binary, `kennel-run`, assets and `platforms/goodluckos.ini`. Make kennel the launcher in one of two ways:
+Unzip `kennel-glos.zip` into the HOME root (MTP: `GA36MB -> HOME`). It contains `ports/kennel/` (`kennel`, `kennel-read`, `kennel-run`, assets, `platforms/goodluckos.ini`), the Books entry `.local/share/applications/books.puppy` and an empty `books/` folder. Make kennel the launcher in one of two ways:
 
 - start it once (for example from a Puppy entry with `COMMAND=/home/player/ports/kennel/kennel`) and set Settings > Launcher at boot to kennel;
 - copy `tools/launcher-glos.sh` to `HOME/.local/launcher.sh`.
@@ -83,13 +85,15 @@ The launcher script runs kennel and starts Puppy when kennel exits with an error
 Over the USB serial console (root, `glos.py` from the goodluck tree):
 
 ```sh
-scripts/deploy-glos.sh               # changed files only (md5 compared on the device)
+scripts/deploy-glos.sh               # changed files only (md5 compared on the device), creates HOME/books
 scripts/deploy-glos.sh --launcher    # also installs tools/launcher-glos.sh as .local/launcher.sh
 ```
 
 Changed files are pushed into `HOME/ports/.kennel-incoming` and then renamed into place on the same file system: writing over the running binary fails with `ETXTBSY`, a rename does not. The running kennel keeps the old binary until it restarts. Environment: `GLOS_PY` (default `/mnt/ext/r36s/goodluck/tools/glos.py`), `GLOS_PORT` (default `/dev/ttyACM0`). The console transfers about 0.75 MB/s.
 
 ## Testing
+
+`scripts/testbooks.sh` fills `build/testbooks`: Project Gutenberg books (War and Peace as EPUB and TXT, Pride and Prejudice as EPUB, TXT and single-file HTML with images, R.U.R. by Karel Capek in Czech as EPUB and TXT) and, generated from the Pride and Prejudice text by `scripts/mkbooks.py` (calibre is not needed), FB2, PalmDOC PDB (compressed and uncompressed) and an uncompressed UTF-8 MOBI.
 
 Host screenshots without a display: `KENNEL_AUTOMATE` runs comma-separated tokens, one every 300 ms; with `SDL_VIDEODRIVER=offscreen` no window is needed.
 
@@ -117,6 +121,31 @@ glos.py sh '/root/bin/padinject down down right a'
 glos.py sh '/root/bin/drmshot > /tmp/shot.ppm'      # screen capture, drmshot from the goodluck tree
 ```
 
+## kennel-read
+
+Minimal e-book reader: one font, scrolling by lines, no images, no effects. Opened by kennel from the Books category (`books.puppy`, folders `HOME/books` and `/media/external/books`, per-book images in `books/icons`) or directly: `kennel-read BOOK`. `kennel-read --dump BOOK` prints the parsed book. As with every Puppy archive, files with the same name but different extensions in one category show as one entry (the last one found), so keep one format per book.
+
+| Format | Extensions | Read | Dropped |
+|---|---|---|---|
+| Plain text | `txt` | UTF-8 only; blank-line separated paragraphs (hard-wrapped text) or one paragraph per line | |
+| EPUB 2 and 3 | `epub` | spine order, table of contents, title and author | images, CSS, scripts, DRM-protected books |
+| HTML, XHTML | `html`, `htm`, `xhtml` | block structure, headings, italic and bold | images, CSS, scripts |
+| FictionBook 2 | `fb2` | sections and titles, emphasis, empty lines | embedded binaries (covers) |
+| PalmDOC, MOBI | `pdb`, `mobi`, `prc` | PalmDOC (uncompressed and compressed), MOBI without DRM in PalmDOC or no compression | HUFF/CDIC compression, KF8 (AZW3), DRM |
+
+Other formats (PDF, AZW3, DOCX) are converted on a computer, for example with calibre: `ebook-convert book.azw3 book.epub`.
+
+| Control | Action |
+|---|---|
+| Up / Down | one line (holding accelerates) |
+| Left / Right, L1 / R1 | one screen |
+| L2 / R2 | previous / next chapter |
+| SELECT | chapter list |
+| START | settings panel |
+| B | save the position and exit |
+
+Settings: font family (Literata or Inter), size 14 to 36, line spacing 1.0 to 2.0, margins (narrow, normal, wide), alignment (left or justified), formatting (plain: one style; styled: bold headings, italic and bold text), paragraphs (first-line indent or spacing), theme (dark, sepia, light), status bar (chapter and progress) on or off, brightness. The reading position is a byte offset into the book text, so it survives font and layout changes; progress is shown in percent.
+
 ## Files
 
 | Path | Content |
@@ -125,7 +154,9 @@ glos.py sh '/root/bin/drmshot > /tmp/shot.ppm'      # screen capture, drmshot fr
 | `$XDG_DATA_HOME/kennel/` (default `~/.local/share/kennel`) | `sessions.tsv`, `favorites`, `boot`, `journal` |
 | `$XDG_CACHE_HOME/kennel/art/` (default `~/.cache/kennel`) | QOI thumbnails and backdrops, keyed by path, size and mtime |
 | `$XDG_RUNTIME_DIR/kennel/`, else `/dev/shm/kennel-UID`, else `/tmp/kennel-UID` | `state` (row and entry to restore), `kennel.log` |
-| next to the binary (symlinks in the CMake build directory), or `KENNEL_ASSETS` | `assets/` (fonts, icons), `platforms/`, `kennel-run` |
+| `$XDG_CONFIG_HOME/kennel/read.ini` | kennel-read settings |
+| `$XDG_DATA_HOME/kennel/read/positions.tsv` | kennel-read reading positions, per book path |
+| next to the binary (symlinks in the CMake build directory), or `KENNEL_ASSETS` | `assets/` (fonts, reading fonts in `fonts/read`, icons), `platforms/`, `kennel-run` |
 
 ## Library: .puppy files
 
@@ -186,8 +217,8 @@ Every launch runs the command through `kennel-run JOURNAL ID COMMAND`, which app
 
 | Component | License |
 |---|---|
-| Inter, JetBrains Mono (`assets/fonts`) | SIL Open Font License 1.1 |
+| Inter, JetBrains Mono (`assets/fonts`), Literata (`assets/fonts/read`) | SIL Open Font License 1.1 |
 | Lucide icons (`assets/icons`) | ISC |
 | stb_image (`third_party/stb_image.h`) | public domain / MIT |
 | QOI (`third_party/qoi.h`) | MIT |
-| SDL3, SDL3_ttf | zlib |
+| SDL3, SDL3_ttf, zlib | zlib |

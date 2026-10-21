@@ -11,7 +11,7 @@ suite=trixie
 mirror=http://deb.debian.org/debian
 keyring=/usr/share/keyrings/debian-archive-keyring.gpg
 packages=(libc6 libc6-dev linux-libc-dev libgcc-14-dev libgcc-s1 libstdc++-14-dev libstdc++6
-          libsdl3-0 libsdl3-dev libsdl3-ttf0 libsdl3-ttf-dev libasound2t64 libasound2-dev)
+          libsdl3-0 libsdl3-dev libsdl3-ttf0 libsdl3-ttf-dev libasound2t64 libasound2-dev zlib1g zlib1g-dev)
 
 stamp=$dest/.packages
 [[ -f $stamp && $(<"$stamp") == "${packages[*]}" ]] && exit 0

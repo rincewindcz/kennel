@@ -39,8 +39,10 @@ struct Book {
     int chapterAt(int paragraph) const;
 };
 
-// Loads by extension: .txt, .epub, .html/.htm/.xhtml, .fb2, .pdb/.mobi/.prc.
+// Loads by extension: .txt, .epub, .html/.htm/.xhtml, .fb2, .pdb/.mobi/.prc. A freshly parsed book
+// is written to the parse cache by flushBookCache(), so the caller can show it first.
 bool loadBook(const std::string& path, Book& book, std::string& error);
+void flushBookCache();
 
 // Format loaders (fill paragraphs, chapters, title, author; loadBook calls finish()).
 bool loadTxt(const std::string& path, Book& book, std::string& error);

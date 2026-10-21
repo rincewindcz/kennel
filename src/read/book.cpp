@@ -1,13 +1,37 @@
 #include "book.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
+#include <sys/stat.h>
 
+#include "paths.h"
 #include "util.h"
 
 namespace {
 
+bool isSpace(unsigned char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v'; }
+
 // Collapses runs of whitespace to single spaces and trims, remapping run ranges.
 void normalize(Paragraph& p) {
+    if (p.runs.empty()) {
+        std::string& t = p.text;
+        size_t w = 0;
+        bool space = true;
+        for (size_t r = 0; r < t.size(); ++r) {
+            unsigned char c = t[r];
+            if (isSpace(c)) {
+                if (!space) t[w++] = ' ';
+                space = true;
+            } else {
+                t[w++] = (char)c;
+                space = false;
+            }
+        }
+        if (w > 0 && t[w - 1] == ' ') --w;
+        t.resize(w);
+        return;
+    }
     std::string out;
     out.reserve(p.text.size());
     std::vector<uint32_t> map(p.text.size() + 1, 0);
@@ -15,8 +39,7 @@ void normalize(Paragraph& p) {
     for (size_t i = 0; i < p.text.size(); ++i) {
         map[i] = (uint32_t)out.size();
         unsigned char c = p.text[i];
-        bool ws = c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
-        if (ws) {
+        if (isSpace(c)) {
             if (!space) out += ' ';
             space = true;
         } else {
@@ -36,6 +59,122 @@ void normalize(Paragraph& p) {
     p.runs.erase(std::remove_if(p.runs.begin(), p.runs.end(), [](const Run& r) { return r.length == 0 || r.style == 0; }),
                  p.runs.end());
     p.text = std::move(out);
+}
+
+// ------------------------------------------------------------------ cache ---
+// Parsed books are cached as a flat binary file keyed by path, size and mtime: reopening a large
+// EPUB costs one file read instead of unzip, markup conversion and normalization.
+
+constexpr char kMagic[8] = {'K', 'B', 'O', 'O', 'K', '0', '0', '1'};
+// Bump when a loader changes its output, so cached books are parsed again.
+constexpr int kParserVersion = 2;
+
+std::string cachePath(const std::string& path) {
+    struct stat st;
+    if (stat(path.c_str(), &st) != 0) return {};
+    std::string dir = paths.cache;
+    if (dir.empty()) {
+        const char* home = getenv("HOME");
+        if (!home) return {};
+        dir = std::string(home) + "/.cache/kennel";
+    }
+    dir += "/read";
+    std::string id = strprintf("%s|%lld|%lld|%d", path.c_str(), (long long)st.st_size, (long long)st.st_mtime, kParserVersion);
+    return strprintf("%s/%016llx.book", dir.c_str(), (unsigned long long)fnv1a(id));
+}
+
+void put32(std::string& out, uint32_t v) { out.append((const char*)&v, 4); }
+void putStr(std::string& out, const std::string& s) {
+    put32(out, (uint32_t)s.size());
+    out += s;
+}
+
+struct Reader {
+    const std::string& d;
+    size_t pos = 0;
+    bool ok = true;
+    uint32_t u32() {
+        uint32_t v = 0;
+        if (pos + 4 > d.size()) return ok = false, 0;
+        memcpy(&v, d.data() + pos, 4);
+        pos += 4;
+        return v;
+    }
+    std::string str() {
+        uint32_t n = u32();
+        if (!ok || n > d.size() - pos) return ok = false, std::string();
+        std::string s = d.substr(pos, n);
+        pos += n;
+        return s;
+    }
+};
+
+void saveCache(const std::string& file, const Book& b) {
+    std::string out(kMagic, 8);
+    putStr(out, b.title);
+    putStr(out, b.author);
+    putStr(out, b.format);
+    put32(out, (uint32_t)b.paragraphs.size());
+    for (const auto& p : b.paragraphs) {
+        out += (char)p.kind;
+        putStr(out, p.text);
+        put32(out, (uint32_t)p.runs.size());
+        for (const auto& r : p.runs) {
+            put32(out, r.start);
+            put32(out, r.length);
+            out += (char)r.style;
+        }
+    }
+    put32(out, (uint32_t)b.chapters.size());
+    for (const auto& c : b.chapters) {
+        putStr(out, c.title);
+        put32(out, c.paragraph);
+    }
+    makeDirs(dirName(file));
+    writeFileAtomic(file, out);
+}
+
+bool loadCache(const std::string& file, Book& b) {
+    auto data = readFile(file);
+    if (!data || data->size() < 8 || memcmp(data->data(), kMagic, 8) != 0) return false;
+    Reader r{*data, 8};
+    b.title = r.str();
+    b.author = r.str();
+    b.format = r.str();
+    uint32_t n = r.u32();
+    if (!r.ok || n > data->size()) return false;
+    b.paragraphs.resize(n);
+    for (auto& p : b.paragraphs) {
+        if (r.pos >= data->size()) return false;
+        p.kind = (Paragraph::Kind)(*data)[r.pos++];
+        p.text = r.str();
+        uint32_t runs = r.u32();
+        if (!r.ok || runs > data->size()) return false;
+        p.runs.resize(runs);
+        for (auto& run : p.runs) {
+            run.start = r.u32();
+            run.length = r.u32();
+            if (r.pos >= data->size()) return false;
+            run.style = (uint8_t)(*data)[r.pos++];
+            if (run.start > p.text.size() || run.length > p.text.size() - run.start) return false;
+        }
+    }
+    uint32_t chapters = r.u32();
+    if (!r.ok || chapters > data->size()) return false;
+    b.chapters.resize(chapters);
+    for (auto& c : b.chapters) {
+        c.title = r.str();
+        c.paragraph = r.u32();
+        if (c.paragraph >= n) return false;
+    }
+    if (!r.ok || r.pos != data->size()) return false;
+    b.offsets.resize(n);
+    b.size = 0;
+    for (size_t i = 0; i < n; ++i) {
+        b.offsets[i] = b.size;
+        b.size += b.paragraphs[i].text.size() + 1;
+    }
+    return n > 0;
 }
 
 }  // namespace
@@ -94,10 +233,19 @@ int Book::chapterAt(int paragraph) const {
     return found;
 }
 
+namespace {
+std::string pendingCache;
+const Book* pendingBook = nullptr;
+}  // namespace
+
 bool loadBook(const std::string& path, Book& book, std::string& error) {
     book = Book{};
     book.path = path;
     std::string ext = lower(path.substr(path.rfind('.') == std::string::npos ? path.size() : path.rfind('.') + 1));
+    std::string cache = cachePath(path);
+    if (!cache.empty() && loadCache(cache, book)) return true;
+    book = Book{};
+    book.path = path;
     bool ok;
     if (ext == "txt") ok = loadTxt(path, book, error);
     else if (ext == "epub") ok = loadEpub(path, book, error);
@@ -118,5 +266,15 @@ bool loadBook(const std::string& path, Book& book, std::string& error) {
         error = "no text found";
         return false;
     }
+    if (!cache.empty()) {
+        pendingCache = cache;
+        pendingBook = &book;
+    }
     return true;
+}
+
+void flushBookCache() {
+    if (pendingBook && !pendingCache.empty()) saveCache(pendingCache, *pendingBook);
+    pendingCache.clear();
+    pendingBook = nullptr;
 }

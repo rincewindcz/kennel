@@ -66,6 +66,7 @@ std::string guessGlyph(const std::string& category) {
     if (c.find("terminal") != std::string::npos) return "terminal";
     if (c.find("emulator") != std::string::npos || c.find("frontend") != std::string::npos) return "layers";
     if (c.find("app") != std::string::npos || c.find("tool") != std::string::npos) return "wrench";
+    if (c.find("book") != std::string::npos || c.find("read") != std::string::npos) return "book-open";
     return "gamepad-2";
 }
 

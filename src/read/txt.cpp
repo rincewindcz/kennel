@@ -2,8 +2,9 @@
 
 #include "util.h"
 
-// Plain UTF-8 text. Blank lines separate paragraphs when the file has them (hard-wrapped text,
-// e.g. Project Gutenberg); otherwise every line is a paragraph.
+// Plain UTF-8 text. When at least 5 % of the lines are blank, blank lines separate paragraphs and
+// the lines between them are joined (hard-wrapped text, e.g. Project Gutenberg, plays with short
+// speeches); otherwise every line is a paragraph.
 bool loadTxt(const std::string& path, Book& book, std::string& error) {
     auto data = readFile(path);
     if (!data) {
@@ -24,7 +25,7 @@ bool loadTxt(const std::string& path, Book& book, std::string& error) {
     }
     size_t blank = 0, nonBlank = 0;
     for (const auto& l : lines) (trim(l).empty() ? blank : nonBlank)++;
-    bool blocks = blank > 0 && nonBlank > blank * 2;
+    bool blocks = nonBlank > 0 && blank * 20 >= lines.size();
 
     Paragraph cur;
     auto flush = [&] {
