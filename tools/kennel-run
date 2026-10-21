@@ -1,0 +1,32 @@
+#!/bin/sh
+# kennel-run JOURNAL ID COMMAND
+# Runs COMMAND with /bin/sh and appends its start and end (exit status) to JOURNAL for kennel's
+# play statistics. The command runs as a child that this script waits for; SIGTERM to the whole
+# group (appctl stop-application) ends it and the wrapper still records the end.
+journal=$1
+id=$2
+cmd=$3
+
+read -r up _ </proc/uptime
+read -r boot </proc/sys/kernel/random/boot_id
+token=$$.$up
+printf 'S\t%s\t%s\t%s\t%s\t%s\n' "$token" "$boot" "$up" "$(date +%s)" "$id" >>"$journal"
+
+# An asynchronous command gets /dev/null as stdin unless redirected: hand it the original one
+# through fd 3, so terminal apps keep the console.
+exec 3<&0
+/bin/sh -c "$cmd" <&3 3<&- &
+child=$!
+exec 3<&-
+trap 'kill -TERM "$child" 2>/dev/null' TERM INT HUP
+while :; do
+    wait "$child"
+    rc=$?
+    kill -0 "$child" 2>/dev/null || break
+done
+# Busybox ash: the read builtin spins while a caught signal is pending, so no traps and no read here.
+trap - TERM INT HUP
+up=$(cat /proc/uptime)
+up=${up%% *}
+printf 'E\t%s\t%s\t%s\t%s\n' "$token" "$up" "$(date +%s)" "$rc" >>"$journal"
+exit "$rc"
