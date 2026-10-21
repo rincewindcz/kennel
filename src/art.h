@@ -22,6 +22,8 @@ class ArtCache {
 public:
     static constexpr int kW = 300, kH = 200, kRadius = 14;
     static constexpr int kBackW = 128, kBackH = 96;
+    // Poster cards (portrait art): the image in a column at the left, the title to its right.
+    static constexpr int kPosterX = 12, kPosterW = 120, kPosterH = 176;
 
     struct Card {
         SDL_Texture* stock = nullptr;
@@ -47,15 +49,17 @@ private:
         std::string key, path;
         Kind kind;
     };
+    enum class Mode { Cover, Icon, Poster };
     struct Result {
         std::string key;
         Image img;
-        bool icon = false;
+        Mode mode = Mode::Cover;
         bool ok = false;
     };
     struct Slot {
         SDL_Texture* tex = nullptr;
-        bool requested = false, failed = false, icon = false;
+        bool requested = false, failed = false;
+        Mode mode = Mode::Cover;
         double readyAt = 0;
         uint64_t used = 0;
     };
@@ -66,6 +70,7 @@ private:
     std::string diskPath(const std::string& path, const char* tag) const;
     Slot& slot(const std::string& key);
     SDL_Texture* compose(const Entry& e, const Category* c, SDL_Texture* icon, int iconW, int iconH);
+    SDL_Texture* composePoster(const Entry& e, SDL_Texture* poster);
     SDL_Texture* categoryImage(const std::string& path);
     SDL_Texture* gradientCard(uint32_t color);
     SDL_Texture* scrim();

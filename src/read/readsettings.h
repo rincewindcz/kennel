@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 #include "gfx.h"
@@ -9,7 +10,7 @@ struct ReadSettings {
     enum class Align { Left, Justify };
     enum class Format { Plain, Styled };
     enum class Paragraphs { Indent, Spacing };
-    enum class Theme { Dark, Sepia, Light };
+    enum class Theme { Dark, Sepia, Light, Custom };
 
     std::string family = "Literata";
     int size = 22;
@@ -20,6 +21,7 @@ struct ReadSettings {
     Paragraphs paragraphs = Paragraphs::Indent;
     Theme theme = Theme::Dark;
     bool statusBar = true;
+    uint32_t customBg = 0x1e1e1e, customFg = 0xd4d4d4;
 
     void load(const std::string& path);
     bool save() const;

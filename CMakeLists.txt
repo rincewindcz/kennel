@@ -15,8 +15,13 @@ find_package(SDL3 REQUIRED CONFIG)
 find_package(SDL3_ttf REQUIRED CONFIG)
 find_package(Threads REQUIRED)
 
+find_package(ZLIB REQUIRED)
+
 # Code shared by kennel and kennel-read.
 add_library(kennelcore STATIC
+    src/zip.cpp
+    src/tokenizer.cpp
+    src/cover.cpp
     src/anim.cpp
     src/util.cpp
     src/ini.cpp
@@ -31,7 +36,7 @@ add_library(kennelcore STATIC
 target_include_directories(kennelcore PUBLIC src third_party)
 target_compile_definitions(kennelcore PUBLIC KENNEL_VERSION="${PROJECT_VERSION}")
 target_compile_options(kennelcore PUBLIC -Wall -Wextra -Wno-missing-field-initializers)
-target_link_libraries(kennelcore PUBLIC SDL3::SDL3 SDL3_ttf::SDL3_ttf Threads::Threads)
+target_link_libraries(kennelcore PUBLIC SDL3::SDL3 SDL3_ttf::SDL3_ttf Threads::Threads ZLIB::ZLIB)
 
 add_executable(kennel
     src/main.cpp
@@ -51,11 +56,10 @@ add_executable(kennel
 )
 target_link_libraries(kennel PRIVATE kennelcore)
 
-find_package(ZLIB REQUIRED)
 file(GLOB READ_SOURCES CONFIGURE_DEPENDS src/read/*.cpp)
 add_executable(kennel-read ${READ_SOURCES})
 target_include_directories(kennel-read PRIVATE src/read)
-target_link_libraries(kennel-read PRIVATE kennelcore ZLIB::ZLIB)
+target_link_libraries(kennel-read PRIVATE kennelcore)
 
 if(KENNEL_ALSA)
     find_path(ALSA_INCLUDE_DIR alsa/asoundlib.h REQUIRED)

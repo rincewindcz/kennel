@@ -66,6 +66,12 @@ MenuItem choice(std::string icon, std::string label, std::vector<std::string> ch
     m.setIndex = std::move(set);
     return m;
 }
+MenuItem level(std::string icon, std::string label, int maxLevel, std::function<int()> get, std::function<void(int)> set) {
+    MenuItem m = slider(std::move(icon), std::move(label), 1, std::max(1, maxLevel), std::max(1, maxLevel / 20), std::move(get),
+                        std::move(set));
+    m.format = [maxLevel](int v) { return strprintf("%d%%", (int)std::lround(v * 100.0 / std::max(1, maxLevel))); };
+    return m;
+}
 MenuItem slider(std::string icon, std::string label, int min, int max, int step, std::function<int()> get,
                 std::function<void(int)> set) {
     MenuItem m;
@@ -198,6 +204,8 @@ void Menu::draw(const SDL_FRect& area, float alpha) {
         if (!m.icon.empty()) {
             gfx.icon(m.icon, x, mid - 10, 20, fade(sel ? accent() : m.danger ? theme::bad : theme::dim, alpha));
             x += 32;
+        } else if (m.indent) {
+            x += 32;
         }
         Font lf = compact ? Font::Small : Font::Body;
         float labelMax = area.w * 0.55f;
@@ -227,8 +235,13 @@ void Menu::draw(const SDL_FRect& area, float alpha) {
                 gfx.round({tx, mid - 3, tw, 6}, 3, fade(theme::line, alpha));
                 gfx.round({tx, mid - 3, std::max(6.f, tw * f), 6}, 3, accent(alpha));
                 gfx.round({tx + tw * f - 7, mid - 7, 14, 14}, 7, fade(rgb(0xffffff), alpha));
-                gfx.text(Font::SmallBold, strprintf("%d%%", v), tx - 12, mid - gfx.lineHeight(Font::SmallBold) / 2,
-                         fade(theme::dim, alpha), 0, Align::Right);
+                float vw = gfx.text(Font::SmallBold, m.format ? m.format(v) : strprintf("%d%%", v), tx - 12,
+                                    mid - gfx.lineHeight(Font::SmallBold) / 2, fade(theme::dim, alpha), 0, Align::Right);
+                if (m.swatch) {
+                    SDL_FRect sw{tx - 12 - vw - 24, mid - 8, 16, 16};
+                    gfx.round(sw, 4, fade(m.swatch(), alpha));
+                    gfx.stroke(sw, 4, 1, fade(theme::line, alpha));
+                }
                 break;
             }
             case MenuItem::Type::Link: gfx.icon("chevron-right", right - 18, mid - 10, 20, fade(theme::dim, alpha)); break;
@@ -236,8 +249,13 @@ void Menu::draw(const SDL_FRect& area, float alpha) {
             case MenuItem::Type::Action:
                 if (m.value) {
                     Font vf = compact ? Font::Small : Font::Body;
-                    gfx.text(vf, m.value(), right, mid - gfx.lineHeight(vf) / 2, fade(theme::dim, alpha), area.w - (x - area.x) - 40 -
-                             std::min(gfx.measure(lf, m.label), labelMax), Align::Right);
+                    float vw = gfx.text(vf, m.value(), right, mid - gfx.lineHeight(vf) / 2, fade(theme::dim, alpha),
+                                        area.w - (x - area.x) - 40 - std::min(gfx.measure(lf, m.label), labelMax), Align::Right);
+                    if (m.swatch) {
+                        SDL_FRect sw{right - vw - 26, mid - 8, 16, 16};
+                        gfx.round(sw, 4, fade(m.swatch(), alpha));
+                        gfx.stroke(sw, 4, 1, fade(theme::line, alpha));
+                    }
                 }
                 break;
             default: break;

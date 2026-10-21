@@ -26,8 +26,9 @@ public:
     bool usbConnected = false;
 
     bool hasBacklight() const { return maxBrightness_ > 0; }
-    int brightness() const;
-    void setBrightness(int percent);
+    int maxBrightness() const { return (int)maxBrightness_; }
+    int brightness() const;  // raw level
+    void setBrightness(int level);
     void screenOff();
     bool wake();  // true if the screen was off
     bool screenIsOff() const { return savedBrightness_ >= 0; }

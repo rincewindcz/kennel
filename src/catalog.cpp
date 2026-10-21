@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <unordered_map>
 
+#include "cover.h"
 #include "ini.h"
 #include "paths.h"
 #include "platform.h"
@@ -282,6 +283,7 @@ void Catalog::load() {
                 else e.command = tmpl + " " + quoted;
                 e.art = lookupImage(art, e.name);
                 if (e.art.empty()) e.art = lookupImage(icons, e.name);
+                if (e.art.empty() && hasEmbeddedCover(fname)) e.art = fpath;
                 e.fallbackArt = defaultIcon;
                 e.id = makeId("rom:" + e.path);
                 e.source = rec.file;

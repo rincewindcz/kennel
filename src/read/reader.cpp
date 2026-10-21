@@ -131,16 +131,16 @@ void Reader::openChapters() {
 int Reader::brightness() const {
     long v = 0;
     if (maxBrightness_ <= 0 || !readLong(platform.backlight + "/brightness", v)) return 0;
-    return (int)std::lround(v * 100.0 / maxBrightness_);
+    return (int)v;
 }
 
-void Reader::setBrightness(int percent) {
+void Reader::setBrightness(int level) {
     if (maxBrightness_ <= 0) return;
-    long raw = std::max(1L, std::lround(std::clamp(percent, 1, 100) * maxBrightness_ / 100.0));
-    writeFile(platform.backlight + "/brightness", std::to_string(raw));
+    writeFile(platform.backlight + "/brightness", std::to_string(std::clamp<long>(level, 1, maxBrightness_)));
 }
 
 void Reader::openSettings() {
+    int keep = mode_ == Mode::Settings ? menu_.selected : 0;
     menu_ = Menu{};
     menu_.compact = true;
     menu_.rowHeight = 36;
@@ -185,17 +185,44 @@ void Reader::openSettings() {
                                   rs_.paragraphs = (ReadSettings::Paragraphs)v;
                                   apply(false);
                               }));
-    m.push_back(items::choice("palette", "Theme", {"Dark", "Sepia", "Light"}, [this] { return (int)rs_.theme; }, [this](int v) {
-        rs_.theme = (ReadSettings::Theme)v;
-        dirty_ = true;
-    }));
+    m.push_back(items::choice("palette", "Theme", {"Dark", "Sepia", "Light", "Custom"}, [this] { return (int)rs_.theme; },
+                              [this](int v) {
+                                  bool custom = rs_.theme == ReadSettings::Theme::Custom;
+                                  rs_.theme = (ReadSettings::Theme)v;
+                                  // The colour rows appear or disappear: rebuild after the menu input.
+                                  if (custom != (rs_.theme == ReadSettings::Theme::Custom)) rebuildSettings_ = true;
+                                  dirty_ = true;
+                              }));
+    if (rs_.theme == ReadSettings::Theme::Custom) {
+        auto colour = [&](const char* name, uint32_t* c) {
+            MenuItem info = items::info("", name, [c] { return strprintf("#%06x", *c & 0xffffff); });
+            info.swatch = [c] { return rgb(*c); };
+            info.indent = true;
+            m.push_back(std::move(info));
+            const char* channels[] = {"Red", "Green", "Blue"};
+            for (int ch = 0; ch < 3; ++ch) {
+                int shift = 16 - ch * 8;
+                MenuItem s = items::slider("", channels[ch], 0, 255, 5, [c, shift] { return (int)((*c >> shift) & 0xff); },
+                                           [this, c, shift](int v) {
+                                               *c = (*c & ~(0xffu << shift)) | ((uint32_t)v << shift);
+                                               dirty_ = true;
+                                           });
+                s.format = [](int v) { return std::to_string(v); };
+                s.indent = true;
+                m.push_back(std::move(s));
+            }
+        };
+        colour("Background", &rs_.customBg);
+        colour("Text", &rs_.customFg);
+    }
     m.push_back(items::toggle("chart-column", "Status bar", [this] { return rs_.statusBar; }, [this](bool v) {
         rs_.statusBar = v;
         apply(false);
     }));
     if (maxBrightness_ > 0)
-        m.push_back(items::slider("sun", "Brightness", 5, 100, 5, [this] { return brightness(); },
-                                  [this](int v) { setBrightness(v); }));
+        m.push_back(items::level("sun", "Brightness", (int)maxBrightness_, [this] { return brightness(); },
+                                 [this](int v) { setBrightness(v); }));
+    menu_.selected = keep;
     menu_.fixSelection();
     mode_ = Mode::Settings;
 }
@@ -223,6 +250,10 @@ void Reader::input(const KeyEvent& ev) {
         case Mode::Settings:
             if (ev.key == Key::Back || ev.key == Key::Start) closePanel();
             else menu_.input(ev);
+            if (rebuildSettings_) {
+                rebuildSettings_ = false;
+                openSettings();
+            }
             return;
         case Mode::Reading: break;
     }

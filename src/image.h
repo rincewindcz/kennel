@@ -13,6 +13,7 @@ struct Image {
 };
 
 bool loadImage(const std::string& path, Image& out);
+bool loadImageMemory(const std::string& bytes, Image& out);
 bool loadQoi(const std::string& path, Image& out);
 bool saveQoi(const std::string& path, const Image& img);
 
@@ -21,3 +22,5 @@ Image cover(const Image& src, int w, int h);
 Image contain(const Image& src, int maxW, int maxH, float maxScale);
 void roundCorners(Image& img, float radius);
 void blur(Image& img, int radius, int passes);
+void darken(Image& img, float factor);
+void composite(Image& dst, const Image& src, int x, int y);  // src over dst, straight alpha

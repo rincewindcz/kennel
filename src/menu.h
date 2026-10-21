@@ -23,7 +23,10 @@ struct MenuItem {
     std::function<int()> getInt;
     std::function<void(int)> setInt;
     std::function<std::string()> value;
+    std::function<std::string(int)> format;  // slider value text, default "N%"
+    std::function<Color()> swatch;          // colour square left of the value
     bool danger = false;
+    bool indent = false;  // aligned with the labels of rows that have an icon
 
     bool selectable() const { return type != Type::Header; }
 };
@@ -38,6 +41,9 @@ MenuItem choice(std::string icon, std::string label, std::vector<std::string> ch
                 std::function<void(int)> set);
 MenuItem slider(std::string icon, std::string label, int min, int max, int step, std::function<int()> get,
                 std::function<void(int)> set);
+// Slider over raw hardware levels 1..maxLevel (e.g. a backlight), shown in percent. Every step
+// changes the level, also when the device has only a few levels.
+MenuItem level(std::string icon, std::string label, int maxLevel, std::function<int()> get, std::function<void(int)> set);
 }  // namespace items
 
 // Vertical list with icons, values, toggles, choices and sliders.

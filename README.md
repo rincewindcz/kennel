@@ -51,7 +51,7 @@ scripts/build.sh all
 
 ## Run on the host
 
-`scripts/testroot.sh` builds `build/testroot`: the goodluckOS system `.puppy` files and icons, the HOME `.puppy` files of the goodluck ports, empty ROM files, a few generated ROM images, and the test books of `scripts/testbooks.sh` in `home/player/books` with the Books entry. It prints the command line:
+`scripts/testroot.sh` builds `build/testroot`: the goodluckOS system `.puppy` files and icons, the HOME `.puppy` files of the goodluck ports, empty ROM files, a few generated ROM images, and the test books of `scripts/testbooks.sh` in `home/player/books` with the Books entry. When `KENNEL_TEST_BOOKS` (default `~/Documents/ebooks`) exists, its EPUB, FB2 and MOBI files are copied there too, to exercise cover extraction; everything stays in `build/`. It prints the command line:
 
 ```sh
 env -u XDG_CONFIG_HOME -u XDG_DATA_HOME -u XDG_CACHE_HOME -u XDG_RUNTIME_DIR \
@@ -123,14 +123,14 @@ glos.py sh '/root/bin/drmshot > /tmp/shot.ppm'      # screen capture, drmshot fr
 
 ## kennel-read
 
-Minimal e-book reader: one font, scrolling by lines, no images, no effects. Opened by kennel from the Books category (`books.puppy`, folders `HOME/books` and `/media/external/books`, per-book images in `books/icons`) or directly: `kennel-read BOOK`. `kennel-read --dump BOOK` prints the parsed book. As with every Puppy archive, files with the same name but different extensions in one category show as one entry (the last one found), so keep one format per book.
+Minimal e-book reader: one font, scrolling by lines, no images, no effects. Opened by kennel from the Books category (`books.puppy`, folders `HOME/books` and `/media/external/books`, per-book images in `books/icons`) or directly: `kennel-read BOOK`. `kennel-read --dump BOOK` prints the parsed book. On goodluckOS HOME is vfat mounted with `iocharset=iso8859-1`: UTF-8 file names (e.g. Czech diacritics) are stored byte for byte, so kennel shows them correctly while a PC browsing HOME over MTP shows them garbled. As with every Puppy archive, files with the same name but different extensions in one category show as one entry (the last one found), so keep one format per book.
 
 | Format | Extensions | Read | Dropped |
 |---|---|---|---|
 | Plain text | `txt` | UTF-8 only; blank-line separated paragraphs (hard-wrapped text) or one paragraph per line | |
 | EPUB 2 and 3 | `epub` | spine order, table of contents, title and author | images, CSS, scripts, DRM-protected books |
 | HTML, XHTML | `html`, `htm`, `xhtml` | block structure, headings, italic and bold | images, CSS, scripts |
-| FictionBook 2 | `fb2` | sections and titles, emphasis, empty lines | embedded binaries (covers) |
+| FictionBook 2 | `fb2` | sections and titles, emphasis, empty lines | embedded binaries (the cover is shown by kennel) |
 | PalmDOC, MOBI | `pdb`, `mobi`, `prc` | PalmDOC (uncompressed and compressed), MOBI without DRM in PalmDOC or no compression | HUFF/CDIC compression, KF8 (AZW3), DRM |
 
 Other formats (PDF, AZW3, DOCX) are converted on a computer, for example with calibre: `ebook-convert book.azw3 book.epub`.
@@ -144,7 +144,7 @@ Other formats (PDF, AZW3, DOCX) are converted on a computer, for example with ca
 | START | settings panel |
 | B | save the position and exit |
 
-Settings: font family (Literata or Inter), size 14 to 36, line spacing 1.0 to 2.0, margins (narrow, normal, wide), alignment (left or justified), formatting (plain: one style; styled: bold headings, italic and bold text), paragraphs (first-line indent or spacing), theme (dark, sepia, light), status bar (chapter and progress) on or off, brightness. The reading position is a byte offset into the book text, so it survives font and layout changes; progress is shown in percent.
+Settings: font family (Literata or Inter), size 14 to 36, line spacing 1.0 to 2.0, margins (narrow, normal, wide), alignment (left or justified), formatting (plain: one style; styled: bold headings, italic and bold text), paragraphs (first-line indent or spacing), theme (dark, sepia, light, custom), status bar (chapter and progress) on or off, brightness. The custom theme shows background and text colour rows with R, G and B sliders (0 to 255); the colours are stored as `custom_bg` and `custom_fg` (`#rrggbb`) in `read.ini` and can be edited there. Brightness sliders here and in kennel's quick settings step one backlight level at a time (the console has 10) and never go below level 1. The reading position is a byte offset into the book text, so it survives font and layout changes; progress is shown in percent.
 
 ## Files
 
@@ -169,7 +169,7 @@ Read as Puppy does: the files in the platform's `sources`, in order (globs sorte
 | `COLOR` | both | `#rrggbb` accent of generated cards and the category |
 | `HIDDEN` | both | not shown on Home |
 
-Images close to 3:2 and at least half the card size cover the card; smaller or other shapes are shown as an icon on a stock card. ROM titles drop trailing `(...)` and `[...]` groups, which are shown as tags.
+Images close to 3:2 and at least half the card size cover the card; portrait images (aspect below 0.85: book covers, portrait box art) get a poster card with the image at the left, the title beside it and the blurred image as background; smaller images are shown as an icon on a stock card. Archive files without their own image whose extension is `epub`, `fb2`, `mobi`, `azw`, `azw3` or `prc` show their embedded cover (EPUB cover-image, meta cover, guide or cover page; FB2 coverpage; MOBI EXTH 201), extracted on the art worker thread and cached in `~/.cache/kennel/art`. ROM titles drop trailing `(...)` and `[...]` groups, which are shown as tags.
 
 ## Statistics
 

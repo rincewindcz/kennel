@@ -14,8 +14,8 @@ QuickPanel::QuickPanel() {
     menu_.rowHeight = 38;
     auto& m = menu_.items;
     if (sys.hasBacklight())
-        m.push_back(items::slider("sun", "Brightness", 5, 100, 5, [] { return sys.brightness(); },
-                                  [](int v) { sys.setBrightness(v); }));
+        m.push_back(items::level("sun", "Brightness", sys.maxBrightness(), [] { return sys.brightness(); },
+                                 [](int v) { sys.setBrightness(v); }));
     if (sys.hasVolume())
         m.push_back(items::slider("volume-2", "Volume", 0, 100, 5, [] { return sys.volume(); }, [](int v) {
             sys.setVolume(v);

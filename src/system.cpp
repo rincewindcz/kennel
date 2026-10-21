@@ -136,13 +136,12 @@ bool System::poll() {
 int System::brightness() const {
     long v = savedBrightness_;
     if (v < 0 && !readLong(platform.backlight + "/brightness", v)) return 0;
-    return maxBrightness_ > 0 ? (int)std::lround(v * 100.0 / maxBrightness_) : 0;
+    return (int)v;
 }
 
-void System::setBrightness(int percent) {
+void System::setBrightness(int level) {
     if (!hasBacklight()) return;
-    long raw = std::max(1L, std::lround(std::clamp(percent, 1, 100) * maxBrightness_ / 100.0));
-    writeFile(platform.backlight + "/brightness", std::to_string(raw));
+    writeFile(platform.backlight + "/brightness", std::to_string(std::clamp<long>(level, 1, maxBrightness_)));
 }
 
 void System::screenOff() {

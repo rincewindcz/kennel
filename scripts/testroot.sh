@@ -51,6 +51,11 @@ art "$home/roms/gba/icons/Metroid Fusion (USA).png" 240x160 '#6a4c93' '#1982c4' 
 "$repo/scripts/testbooks.sh" >/dev/null
 mkdir -p "$home/books"
 cp "$repo"/build/testbooks/* "$home/books/"
+# Optional local extra: own books with covers (KENNEL_TEST_BOOKS, default ~/Documents/ebooks).
+extra=${KENNEL_TEST_BOOKS:-$HOME/Documents/ebooks}
+if [[ -d $extra ]]; then
+    find "$extra" -maxdepth 1 -type f \( -iname '*.epub' -o -iname '*.fb2' -o -iname '*.mobi' \) -exec cp {} "$home/books/" \;
+fi
 cp "$repo/platforms/goodluckos/books.puppy" "$home/.local/share/applications/"
 
 cat <<MSG

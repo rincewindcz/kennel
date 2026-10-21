@@ -41,7 +41,7 @@ private:
     void savePos();
     void automate(std::vector<KeyEvent>& keys);
     int brightness() const;
-    void setBrightness(int percent);
+    void setBrightness(int level);
 
     Mode mode_ = Mode::Reading;
     Book book_;
@@ -57,6 +57,7 @@ private:
     bool posDirty_ = false;
     double scrolledAt_ = 0;
     long maxBrightness_ = 0;
+    bool rebuildSettings_ = false;
 
     std::vector<std::string> script_;
     double scriptAt_ = 0;

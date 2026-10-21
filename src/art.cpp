@@ -6,6 +6,7 @@
 
 #include "anim.h"
 #include "catalog.h"
+#include "cover.h"
 #include "gfx.h"
 #include "util.h"
 
@@ -16,6 +17,35 @@ constexpr size_t kMaxSlots = 64;
 constexpr int kComposePerFrame = 3;
 constexpr int kUploadsPerFrame = 3;
 constexpr float kFadeIn = 0.22f;
+
+// Book files yield their embedded cover, everything else is an image file.
+bool loadArt(const std::string& path, Image& out) {
+    if (!hasEmbeddedCover(path)) return loadImage(path, out);
+    std::string bytes;
+    return extractCover(path, bytes) && loadImageMemory(bytes, out);
+}
+
+// Background: the art blurred and darkened; the art itself contained in the left column.
+Image poster(const Image& src) {
+    Image card = cover(src, ArtCache::kW, ArtCache::kH);
+    blur(card, 6, 3);
+    darken(card, 0.42f);
+    Image art = contain(src, ArtCache::kPosterW, ArtCache::kPosterH, 2.f);
+    roundCorners(art, 6);
+    int x = ArtCache::kPosterX + (ArtCache::kPosterW - art.w) / 2, y = (ArtCache::kH - art.h) / 2;
+
+    Image shade;
+    shade.w = art.w + 16;
+    shade.h = art.h + 16;
+    shade.px.assign((size_t)shade.w * shade.h * 4, 0);
+    for (int sy = 8; sy < 8 + art.h; ++sy)
+        for (int sx = 8; sx < 8 + art.w; ++sx) shade.px[((size_t)sy * shade.w + sx) * 4 + 3] = 150;
+    blur(shade, 4, 2);
+    composite(card, shade, x - 8 + 1, y - 8 + 3);
+    composite(card, art, x, y);
+    roundCorners(card, ArtCache::kRadius);
+    return card;
+}
 }  // namespace
 
 void ArtCache::start(const std::string& cacheDir) {
@@ -65,7 +95,7 @@ ArtCache::Result ArtCache::process(const Job& job) {
             return r;
         }
         Image src;
-        if (!loadImage(job.path, src)) return r;
+        if (!loadArt(job.path, src)) return r;
         r.img = cover(src, kBackW, kBackH);
         blur(r.img, 3, 3);
         r.ok = true;
@@ -73,30 +103,33 @@ ArtCache::Result ArtCache::process(const Job& job) {
         return r;
     }
 
-    std::string coverFile = diskPath(job.path, "c"), iconFile = diskPath(job.path, "i");
-    if (coverFile.empty()) return r;
-    if (loadQoi(coverFile, r.img)) {
-        r.ok = true;
-        return r;
-    }
-    if (loadQoi(iconFile, r.img)) {
-        r.ok = r.icon = true;
-        return r;
+    const std::pair<const char*, Mode> tags[] = {{"c", Mode::Cover}, {"i", Mode::Icon}, {"p", Mode::Poster}};
+    for (const auto& [tag, mode] : tags) {
+        std::string file = diskPath(job.path, tag);
+        if (file.empty()) return r;
+        if (loadQoi(file, r.img)) {
+            r.ok = true;
+            r.mode = mode;
+            return r;
+        }
     }
     Image src;
-    if (!loadImage(job.path, src)) return r;
+    if (!loadArt(job.path, src)) return r;
     float aspect = (float)src.w / src.h, want = (float)kW / kH;
     bool large = src.w >= kW / 2 && src.h >= kH / 2;
     bool fits = std::fabs(aspect / want - 1.f) < 0.35f;
     if (large && fits) {
         r.img = cover(src, kW, kH);
         roundCorners(r.img, kRadius);
-        saveQoi(coverFile, r.img);
+        r.mode = Mode::Cover;
+    } else if (aspect < 0.85f && src.h >= kPosterH / 2) {
+        r.img = poster(src);
+        r.mode = Mode::Poster;
     } else {
         r.img = contain(src, kW - 80, kH - 76, 2.f);
-        r.icon = true;
-        saveQoi(iconFile, r.img);
+        r.mode = Mode::Icon;
     }
+    saveQoi(diskPath(job.path, r.mode == Mode::Cover ? "c" : r.mode == Mode::Poster ? "p" : "i"), r.img);
     r.ok = true;
     return r;
 }
@@ -147,12 +180,27 @@ ArtCache::Card ArtCache::card(const Entry& e, const Category* c) {
         std::string key = "c:" + e.art;
         want(key, e.art, kCover);
         Slot& s = slot(key);
-        if (s.tex && !s.icon) {
+        auto fadeIn = [&] {
+            float a = std::clamp((float)((anim::now() - s.readyAt) / std::max(kFadeIn * anim::scale(), 0.001f)), 0.f, 1.f);
+            if (a < 1.f) anim::keepAlive();
+            return a;
+        };
+        if (s.tex && s.mode == Mode::Cover) {
             out.art = s.tex;
-            out.artAlpha = std::clamp((float)((anim::now() - s.readyAt) / std::max(kFadeIn * anim::scale(), 0.001f)), 0.f, 1.f);
+            out.artAlpha = fadeIn();
             if (out.artAlpha >= 1.f) return out;
-            anim::keepAlive();
-        } else if (s.tex && s.icon) {
+        } else if (s.tex && s.mode == Mode::Poster) {
+            Slot& sp = slot("sp:" + e.id);
+            if (!sp.tex && composedThisFrame_ < kComposePerFrame) {
+                sp.tex = composePoster(e, s.tex);
+                ++composedThisFrame_;
+            }
+            if (sp.tex) {
+                out.art = sp.tex;
+                out.artAlpha = fadeIn();
+                if (out.artAlpha >= 1.f) return out;
+            }
+        } else if (s.tex && s.mode == Mode::Icon) {
             std::string skey = "si:" + e.id;
             Slot& st = slot(skey);
             if (!st.tex && composedThisFrame_ < kComposePerFrame) {
@@ -176,7 +224,10 @@ ArtCache::Card ArtCache::card(const Entry& e, const Category* c) {
 }
 
 SDL_Texture* ArtCache::backdrop(const Entry& e, const Category* c, float& alpha) {
-    std::string path = !e.art.empty() ? e.art : !e.fallbackArt.empty() ? e.fallbackArt : c ? c->image : "";
+    std::string fallback = !e.fallbackArt.empty() ? e.fallbackArt : c ? c->image : "";
+    auto own = slots_.find("c:" + e.art);
+    bool ownFailed = own != slots_.end() && own->second.failed;
+    std::string path = !e.art.empty() && !ownFailed ? e.art : fallback;
     alpha = 0;
     if (path.empty()) return nullptr;
     std::string key = "b:" + path;
@@ -235,7 +286,7 @@ void ArtCache::pump() {
             continue;
         }
         s.tex = gfx.texture(r.img);
-        s.icon = r.icon;
+        s.mode = r.mode;
         s.readyAt = anim::now();
         s.failed = !s.tex;
     }
@@ -353,6 +404,30 @@ SDL_Texture* ArtCache::compose(const Entry& e, const Category* c, SDL_Texture* i
             gfx.text(Font::Small, e.tags, pad, kH - pad - lines.size() * lh - gfx.lineHeight(Font::Small) - 2,
                      fade(theme::text, 0.7f), kW - 2 * pad);
     }
+
+    gfx.setTarget(prev);
+    composeMs += (SDL_GetTicksNS() - t0) / 1e6;
+    return t;
+}
+
+SDL_Texture* ArtCache::composePoster(const Entry& e, SDL_Texture* poster) {
+    uint64_t t0 = SDL_GetTicksNS();
+    SDL_Texture* t = gfx.target(kW, kH);
+    if (!t) return nullptr;
+    SDL_Texture* prev = SDL_GetRenderTarget(gfx.renderer);
+    gfx.setTarget(t);
+    gfx.image(poster, {0, 0, (float)kW, (float)kH});
+
+    float x = kPosterX + kPosterW + 14, w = kW - x - 14;
+    auto lines = gfx.wrap(Font::Bold, e.title, w, 4);
+    float lh = gfx.lineHeight(Font::Bold), th = gfx.lineHeight(Font::Small);
+    float h = lines.size() * lh + (e.tags.empty() ? 0 : th + 4);
+    float y = std::round((kH - h) / 2);
+    for (const auto& l : lines) {
+        gfx.text(Font::Bold, l, x, y, theme::text);
+        y += lh;
+    }
+    if (!e.tags.empty()) gfx.text(Font::Small, e.tags, x, y + 4, fade(theme::text, 0.7f), w);
 
     gfx.setTarget(prev);
     composeMs += (SDL_GetTicksNS() - t0) / 1e6;

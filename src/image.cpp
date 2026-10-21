@@ -33,6 +33,20 @@ bool loadImage(const std::string& path, Image& out) {
     return true;
 }
 
+bool loadImageMemory(const std::string& bytes, Image& out) {
+    int w, h, n;
+    auto* p = (const stbi_uc*)bytes.data();
+    int len = (int)bytes.size();
+    if (!stbi_info_from_memory(p, len, &w, &h, &n) || (long long)w * h > kMaxPixels) return false;
+    stbi_uc* data = stbi_load_from_memory(p, len, &w, &h, &n, 4);
+    if (!data) return false;
+    out.w = w;
+    out.h = h;
+    out.px.assign(data, data + (size_t)w * h * 4);
+    stbi_image_free(data);
+    return true;
+}
+
 bool loadQoi(const std::string& path, Image& out) {
     auto bytes = readFile(path);
     if (!bytes) return false;
@@ -186,5 +200,28 @@ void blur(Image& img, int radius, int passes) {
     for (int p = 0; p < passes; ++p) {
         pass(img.px.data(), tmp.data(), img.w, img.h, stride, 4);
         pass(tmp.data(), img.px.data(), img.w, img.h, stride, stride);
+    }
+}
+
+void darken(Image& img, float factor) {
+    for (size_t i = 0; i < img.px.size(); i += 4)
+        for (int c = 0; c < 3; ++c) img.px[i + c] = (uint8_t)std::lround(img.px[i + c] * factor);
+}
+
+void composite(Image& dst, const Image& src, int x, int y) {
+    for (int sy = 0; sy < src.h; ++sy) {
+        int dy = y + sy;
+        if (dy < 0 || dy >= dst.h) continue;
+        for (int sx = 0; sx < src.w; ++sx) {
+            int dx = x + sx;
+            if (dx < 0 || dx >= dst.w) continue;
+            const uint8_t* s = &src.px[((size_t)sy * src.w + sx) * 4];
+            uint8_t* d = &dst.px[((size_t)dy * dst.w + dx) * 4];
+            float a = s[3] / 255.f, da = d[3] / 255.f;
+            float oa = a + da * (1 - a);
+            if (oa <= 0) continue;
+            for (int c = 0; c < 3; ++c) d[c] = (uint8_t)std::lround((s[c] * a + d[c] * da * (1 - a)) / oa);
+            d[3] = (uint8_t)std::lround(oa * 255);
+        }
     }
 }
