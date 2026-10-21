@@ -63,7 +63,7 @@ void HomeScreen::rebuild() {
     const Catalog& cat = app.catalog;
     rows_.clear();
 
-    auto visible = [&](int idx) { return !cat.entries[idx].hidden; };
+    auto visible = [&](int idx) { return !cat.entries[idx].hidden && !app.stats.isHidden(cat.entries[idx].id); };
     if (settings.showContinue) {
         Row r{Kind::Continue, "continue", "Continue", "history", "Recently played", settings.accentColor()};
         for (const auto& id : app.stats.recent(20)) {

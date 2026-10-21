@@ -168,7 +168,7 @@ The goodluckOS clock starts at 1970 on every boot (no battery-backed RTC), so "l
 
 ### 7.1 Details (X)
 
-Card, statistics (play time, sessions, last played, last session length, last exit, first played when the clock was set), title, category and tags, description. Actions: Play, Favorite, Start at boot (writes `autolaunch` as `# category<TAB>name` plus the wrapped command, the Puppy format), Last app log, Reset statistics (confirmation). Expert mode adds Run in terminal and Entry internals (id, source file and line, file, art paths, command, wrapped command).
+Card, statistics (play time, sessions, last played, last session length, last exit, first played when the clock was set), title, category and tags, description. Actions: Play, Favorite, Hide from Home (entry id in `hidden`; Settings > Hidden entries lists hidden entries by category with a toggle that shows them again), Start at boot (writes `autolaunch` as `# category<TAB>name` plus the wrapped command, the Puppy format), Last app log, Reset statistics (confirmation). Expert mode adds Run in terminal and Entry internals (id, source file and line, file, art paths, command, wrapped command).
 
 ### 7.2 Statistics page
 
@@ -194,7 +194,7 @@ Panel from the right over dimmed Home: battery (level, estimated time left or un
 
 | Setting | Key | Values |
 |---|---|---|
-| Accent colour | `accent` | Blue, Teal, Amber, Rose, Violet, Green (index) |
+| Accent colour | `accent`, `accent_custom` | Blue, Teal, Amber, Rose, Violet, Green, Crimson, Custom (index); `#rrggbb` for Custom, edited with R, G and B sliders shown under the choice |
 | Background | `background` | `gradient`, `art` |
 | Animations | `animations` | `normal`, `fast` (half duration), `off` |
 | Top bar: time | `time` | `auto`, `clock`, `uptime`, `off` |

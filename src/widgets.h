@@ -21,6 +21,8 @@ public:
     std::string title() const override { return title_; }
     void resumed() override;
     void rebuild();
+    // Rebuilds after the current input, for items that add or remove rows.
+    void requestRebuild() { rebuildPending_ = true; }
 
     std::function<void(Key)> extraKey;
     std::vector<Hint> extraHints;
@@ -30,6 +32,7 @@ protected:
     std::string title_, icon_;
     std::function<std::vector<MenuItem>()> build_;
     Menu menu_;
+    bool rebuildPending_ = false;
 };
 
 class DialogScreen : public Screen {

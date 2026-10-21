@@ -91,6 +91,36 @@ public:
     }
 };
 
+// Entries hidden from Home, by category and title; switching one on shows it again.
+void openHiddenEntries() {
+    std::vector<std::string> ids(app.stats.hidden().begin(), app.stats.hidden().end());
+    std::vector<std::pair<std::string, std::string>> rows;  // sort key, id
+    for (const auto& id : ids) {
+        const Entry* e = app.catalog.find(id);
+        rows.push_back({e ? lower(e->category + "\t" + e->title) : "\x7f" + id, id});
+    }
+    std::sort(rows.begin(), rows.end());
+    auto page = std::make_unique<MenuScreen>("Hidden entries", "eye-off", [rows] {
+        std::vector<MenuItem> out;
+        std::string category;
+        for (const auto& [key, id] : rows) {
+            const Entry* e = app.catalog.find(id);
+            std::string cat = e ? e->category : "Not in the library";
+            if (cat != category) {
+                out.push_back(items::header(cat));
+                category = cat;
+            }
+            out.push_back(items::toggle("", e ? e->title : id, [id] { return !app.stats.isHidden(id); },
+                                        [id](bool shown) { app.stats.setHidden(id, !shown); }));
+            out.back().indent = true;
+        }
+        if (out.empty()) out.push_back(items::info("eye", "Nothing hidden", [] { return std::string(); }));
+        return out;
+    });
+    page->subtitle = "Switched on shows the entry on Home again";
+    app.push(std::move(page));
+}
+
 }  // namespace
 
 void App::openSettings() {
@@ -99,10 +129,35 @@ void App::openSettings() {
         m.push_back(items::header("APPEARANCE"));
         std::vector<std::string> accents;
         for (int i = 0; i < kAccentCount; ++i) accents.push_back(kAccents[i].name);
+        accents.push_back("Custom");
         m.push_back(items::choice("palette", "Accent colour", accents, [] { return settings.accent; }, [](int v) {
+            bool custom = settings.accent == kAccentCount;
             settings.accent = v;
             save();
+            // The colour rows appear or disappear.
+            if (custom != (v == kAccentCount))
+                if (auto* page = dynamic_cast<MenuScreen*>(app.top())) page->requestRebuild();
         }));
+        if (settings.accent == kAccentCount) {
+            MenuItem info = items::info("", "Colour", [] { return strprintf("#%06x", settings.customAccent & 0xffffff); });
+            info.swatch = [] { return rgb(settings.customAccent); };
+            info.indent = true;
+            m.push_back(std::move(info));
+            const char* channels[] = {"Red", "Green", "Blue"};
+            for (int ch = 0; ch < 3; ++ch) {
+                int shift = 16 - ch * 8;
+                MenuItem s = items::slider("", channels[ch], 0, 255, 5,
+                                           [shift] { return (int)((settings.customAccent >> shift) & 0xff); },
+                                           [shift](int v) {
+                                               uint32_t& c = settings.customAccent;
+                                               c = (c & ~(0xffu << shift)) | ((uint32_t)v << shift);
+                                               save();
+                                           });
+                s.format = [](int v) { return std::to_string(v); };
+                s.indent = true;
+                m.push_back(std::move(s));
+            }
+        }
         m.push_back(items::choice("layers", "Background", {"Gradient", "Game art"}, [] { return (int)settings.background; },
                                   [](int v) {
                                       settings.background = (Settings::Background)v;
@@ -152,6 +207,9 @@ void App::openSettings() {
             save();
         }));
         m.push_back(items::link("list", "Categories", [] { app.push(std::make_unique<CategoryScreen>()); }));
+        MenuItem hiddenLink = items::link("eye-off", "Hidden entries", [] { openHiddenEntries(); });
+        hiddenLink.value = [] { return std::to_string(app.stats.hidden().size()); };
+        m.push_back(std::move(hiddenLink));
         m.push_back(items::action("refresh-cw", "Rescan library", [] {
             app.reloadCatalog();
             art.clear();

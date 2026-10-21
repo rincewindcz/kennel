@@ -244,7 +244,13 @@ void Menu::draw(const SDL_FRect& area, float alpha) {
                 }
                 break;
             }
-            case MenuItem::Type::Link: gfx.icon("chevron-right", right - 18, mid - 10, 20, fade(theme::dim, alpha)); break;
+            case MenuItem::Type::Link:
+                gfx.icon("chevron-right", right - 18, mid - 10, 20, fade(theme::dim, alpha));
+                if (m.value) {
+                    Font vf = compact ? Font::Small : Font::Body;
+                    gfx.text(vf, m.value(), right - 26, mid - gfx.lineHeight(vf) / 2, fade(theme::dim, alpha), 0, Align::Right);
+                }
+                break;
             case MenuItem::Type::Info:
             case MenuItem::Type::Action:
                 if (m.value) {

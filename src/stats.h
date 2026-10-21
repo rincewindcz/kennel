@@ -41,6 +41,11 @@ public:
     void toggleFavorite(const std::string& id);
     const std::vector<std::string>& favorites() const { return favoriteOrder_; }
 
+    // Entries the user hid from Home; listed in Settings > Hidden entries.
+    bool isHidden(const std::string& id) const { return hidden_.count(id) > 0; }
+    void setHidden(const std::string& id, bool hidden);
+    const std::unordered_set<std::string>& hidden() const { return hidden_; }
+
     void reset(const std::string& id);
     std::string journal() const { return dir_ + "/journal"; }
     int boot() const { return boot_; }
@@ -56,6 +61,7 @@ private:
     std::unordered_map<std::string, EntryStats> stats_;
     std::unordered_set<std::string> favorites_;
     std::vector<std::string> favoriteOrder_;
+    std::unordered_set<std::string> hidden_;
     const Session* newest_ = nullptr;
     long newestSeq_ = -1;
 };

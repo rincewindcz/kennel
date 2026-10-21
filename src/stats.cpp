@@ -59,6 +59,8 @@ void Stats::load(const std::string& dataDir) {
 
     favorites_.clear();
     favoriteOrder_.clear();
+    hidden_.clear();
+    eachLine(readFile(dir_ + "/hidden").value_or(""), [&](const std::string& line) { hidden_.insert(line); });
     eachLine(readFile(dir_ + "/favorites").value_or(""), [&](const std::string& line) {
         if (favorites_.insert(line).second) favoriteOrder_.push_back(line);
     });
@@ -185,6 +187,15 @@ void Stats::toggleFavorite(const std::string& id) {
     std::string out;
     for (const auto& f : favoriteOrder_) out += f + "\n";
     writeFileAtomic(dir_ + "/favorites", out);
+}
+
+void Stats::setHidden(const std::string& id, bool hidden) {
+    if (hidden ? !hidden_.insert(id).second : !hidden_.erase(id)) return;
+    std::vector<std::string> sorted(hidden_.begin(), hidden_.end());
+    std::sort(sorted.begin(), sorted.end());
+    std::string out;
+    for (const auto& h : sorted) out += h + "\n";
+    writeFileAtomic(dir_ + "/hidden", out);
 }
 
 void Stats::reset(const std::string& id) {

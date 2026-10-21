@@ -10,7 +10,7 @@ Settings settings;
 
 const AccentPreset kAccents[] = {
     {"Blue", 0x4f8cff}, {"Teal", 0x2ec4b6}, {"Amber", 0xffb020},
-    {"Rose", 0xff5c8a}, {"Violet", 0x9b7bff}, {"Green", 0x5bd16e},
+    {"Rose", 0xff5c8a}, {"Violet", 0x9b7bff}, {"Green", 0x5bd16e}, {"Crimson", 0xdc2847},
 };
 const int kAccentCount = sizeof kAccents / sizeof kAccents[0];
 
@@ -38,7 +38,8 @@ void Settings::load(const std::string& file) {
     background = pick(s->get("background"), {"gradient", "art"}, background);
     animations = pick(s->get("animations"), {"normal", "fast", "off"}, animations);
     sort = pick(s->get("sort"), {"name", "last_played", "play_time"}, sort);
-    accent = std::clamp(atoi(s->get("accent", "0").c_str()), 0, kAccentCount - 1);
+    accent = std::clamp(atoi(s->get("accent", "0").c_str()), 0, kAccentCount);
+    parseColor(s->get("accent_custom"), customAccent);
     lowBattery = std::clamp(atoi(s->get("low_battery", std::to_string(lowBattery)).c_str()), 0, 50);
     flag("report_errors", reportErrors);
     flag("show_continue", showContinue);
@@ -73,6 +74,7 @@ bool Settings::save() const {
     out += strprintf("time=%s\n", timeNames[(int)time]);
     out += strprintf("background=%s\n", bgNames[(int)background]);
     out += strprintf("accent=%d\n", accent);
+    out += strprintf("accent_custom=#%06x\n", customAccent & 0xffffff);
     out += strprintf("animations=%s\n", animNames[(int)animations]);
     out += strprintf("sort=%s\n", sortNames[(int)sort]);
     out += strprintf("low_battery=%d\n", lowBattery);
@@ -96,4 +98,4 @@ float Settings::animScale() const {
     }
 }
 
-uint32_t Settings::accentColor() const { return kAccents[accent].rgb; }
+uint32_t Settings::accentColor() const { return accent < kAccentCount ? kAccents[accent].rgb : customAccent; }

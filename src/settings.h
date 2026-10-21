@@ -13,7 +13,8 @@ struct Settings {
     bool swapConfirm = false;
     TimeMode time = TimeMode::Auto;
     Background background = Background::Art;
-    int accent = 0;
+    int accent = 0;  // index into kAccents; kAccentCount is the custom colour
+    uint32_t customAccent = 0x4f8cff;
     Animations animations = Animations::Normal;
     Sort sort = Sort::Name;
     int lowBattery = 15;

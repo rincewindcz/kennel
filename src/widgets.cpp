@@ -59,8 +59,12 @@ void MenuScreen::input(const KeyEvent& ev) {
         close();
         return;
     }
-    if (menu_.input(ev)) return;
-    if (extraKey) extraKey(ev.key);
+    bool used = menu_.input(ev);
+    if (rebuildPending_) {
+        rebuildPending_ = false;
+        rebuild();
+    }
+    if (!used && extraKey) extraKey(ev.key);
 }
 
 std::vector<Hint> MenuScreen::hints() const {

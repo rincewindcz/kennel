@@ -25,6 +25,11 @@ void DetailsScreen::build() {
                                         [id](bool on) {
                                             if (on != app.stats.isFavorite(id)) app.stats.toggleFavorite(id);
                                         }));
+    menu_.items.push_back(items::toggle("eye-off", "Hide from Home", [id] { return app.stats.isHidden(id); },
+                                        [id](bool on) {
+                                            app.stats.setHidden(id, on);
+                                            if (on) app.toast("Hidden. Settings > Hidden entries shows it again", "eye-off");
+                                        }));
     if (!platform.autolaunch.empty())
         menu_.items.push_back(items::toggle("zap", "Start at boot", [id] { return app.autolaunchId() == id; },
                                             [id](bool on) {
