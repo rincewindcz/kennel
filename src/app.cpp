@@ -311,6 +311,8 @@ void App::dockInput(const KeyEvent& ev) {
 // ----------------------------------------------------------------- input ---
 
 void App::dispatch(const KeyEvent& ev) {
+    static const bool debug = getenv("KENNEL_DEBUG_INPUT") != nullptr;
+    if (debug) logf("key %d%s", (int)ev.key, ev.repeat ? " repeat" : "");
     if (sys.wake()) {
         input.releaseAll();
         return;
@@ -583,10 +585,13 @@ int App::run(int argcIn, char** argvIn) {
     signal(SIGPIPE, SIG_IGN);
 
     SDL_SetHint(SDL_HINT_VIDEO_DOUBLE_BUFFER, "1");
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS)) {
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "0");
+    // The gamepad subsystem starts after the first frame: its device scan delays the first frame.
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         logf("SDL_Init: %s", SDL_GetError());
         return 1;
     }
+    logf("SDL_Init %.0f ms", (SDL_GetTicksNS() - t0) / 1e6);
     if (!gfx.init(platform.width, platform.height, platform.fullscreen)) return 1;
 
     catalog.load();
@@ -645,6 +650,12 @@ int App::run(int argcIn, char** argvIn) {
             dirty = false;
             frame();
             needFrame = anim::alive() || !pending_.empty();
+            if (!SDL_WasInit(SDL_INIT_GAMEPAD)) {
+                logf("first frame at %.0f ms (draw %.0f ms: masks %.0f, icons %.0f, cards %.0f, text %.0f)",
+                     (SDL_GetTicksNS() - t0) / 1e6, gfx.frameMs, gfx.maskMs, gfx.iconMs, art.composeMs, gfx.textMs);
+                if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) logf("gamepad init: %s", SDL_GetError());
+                needFrame = true;
+            }
         }
         if (launch_.active && !launch_.started && launch_.t.value >= 1.f) startLaunch();
     }

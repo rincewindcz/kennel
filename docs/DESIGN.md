@@ -6,7 +6,7 @@ Launcher for Linux handhelds, first target goodluckOS on the GA36-MB A23 unit (6
 
 | Goal | Measure |
 |---|---|
-| Fast return from a game | first frame under 300 ms after the supervisor starts the launcher |
+| Fast return from a game | first frame about 400 ms after the supervisor starts the launcher (section 11.1) |
 | Large art, few items on screen | focused card 300x200, one neighbour visible on each side |
 | Smooth, simple motion | fade, translate, scale only; vsync while animating, no redraw when idle |
 | Drop-in for Puppy on goodluckOS | same `.puppy` files and precedence, same `~/autolaunch` format, launches through `appctl` |
@@ -22,9 +22,9 @@ Non-goals: scraping (the device has no network), video previews, touch input.
 |---|---|---|
 | Language | C++20; clang cross build against Debian trixie armhf | `std::span`, designated initializers; trixie libraries are older than or equal to the goodluckOS ones |
 | Video, input, threads | SDL3 renderer on KMSDRM (`opengles2` on lima) | on the device; its SDL2 is `sdl2-compat` over SDL3 |
-| Text | SDL3_ttf 3.2 renderer text engine (`TTF_Text`), cached per string | glyph atlases on the GPU; Puppy re-rasterizes every string on every redraw |
+| Text | SDL3_ttf rasterizes each string once (`TTF_RenderText_Blended`, white) into its own texture, cached and tinted at draw time; unused for 120 frames and over 400 entries: evicted | the SDL3_ttf renderer text engine (`TTF_Text`) cost about 6 ms per text object on Mali-400 (atlas updates stall the GPU), a small new texture about 1 ms; Puppy re-rasterizes every string on every redraw |
 | Images | stb_image (PNG, JPEG, BMP) on a worker thread; QOI disk cache | no SDL3_image dependency; the device's SDL3_image build differs from Debian's |
-| Shapes | 9-grid textures with analytic anti-aliased masks (rounded rects, rings, soft shadows), vertex-colour gradients | no extra library, sharp at any size |
+| Shapes | 9-grid textures with analytic anti-aliased masks (rounded rects, rings, soft shadows; shadow blur rounded to 4 px steps so few masks exist), vertex-colour gradients, background glow from one 64x64 radial texture | no extra library, sharp at any size; a large shadow mask cost about 40 ms to build on the device |
 | Audio mixer | libasound simple mixer (optional, `KENNEL_ALSA`) | volume, mute, speaker switch |
 | Icons | Lucide (ISC) SVGs rasterized to white PNGs at 20 and 32 px by `scripts/icons.sh`, tinted at draw time | no SVG code on the device |
 | Fonts | Inter Regular, SemiBold, Bold; JetBrains Mono for logs; platform fallback fonts for CJK | the device has no monospace font |
@@ -34,7 +34,7 @@ The cross build (`scripts/build.sh armhf`) links libstdc++ statically and checks
 
 ## 3. Platform integration
 
-`platforms/<id>.ini`, selected by `ID` in `/etc/os-release` or `KENNEL_PLATFORM`. Keys: README, section "Platform profiles".
+`platforms/<id>.ini`, selected by `ID` in `/etc/os-release` or `KENNEL_PLATFORM` (an id, or a path containing `/`), searched in `<exe dir>/platforms` and `<exe dir>/../share/kennel/platforms`. Keys: README, section "Platform profiles". `tail_categories` places system and tool categories (goodluckOS: Emulators/Frontends, Terminal, System) after the game categories.
 
 Launch modes:
 
@@ -144,7 +144,15 @@ Launch: overlay with the card and title fades in (180 ms), then the platform lau
 <exe dir>/kennel-run <data>/journal <id> <command>
 ```
 
-`kennel-run` (POSIX sh) appends `S token boot_id uptime wall id`, runs `/bin/sh -c command` in the foreground with SIGTERM, SIGINT and SIGHUP caught (so `appctl stop-application`, which signals the whole cgroup, ends the app but not the wrapper; caught signals revert to default in the child), then appends `E token uptime wall status`. Autolaunch entries written by kennel use the same wrapper, so sessions started at boot are counted too.
+`kennel-run` (POSIX sh, written for busybox ash):
+
+1. appends `S token boot_id uptime wall id`;
+2. starts `/bin/sh -c command` as an asynchronous child; an asynchronous command gets `/dev/null` as stdin unless redirected, so the original stdin is passed through fd 3 and terminal apps keep the console;
+3. traps SIGTERM, SIGINT and SIGHUP and forwards SIGTERM to the child (`appctl stop-application` signals the whole cgroup: the app ends, the wrapper survives), and loops on `wait` until the child is gone;
+4. clears the traps and reads `/proc/uptime` with `cat`: the busybox ash `read` builtin spins at 100 % CPU while a caught signal is pending;
+5. appends `E token uptime wall status`.
+
+Autolaunch entries written by kennel use the same wrapper, so sessions started at boot are counted too.
 
 On start, kennel increments its boot counter when `/proc/sys/kernel/random/boot_id` changed, then folds the journal into `sessions.tsv` (cases in the README, section "Statistics") and truncates it. Entry statistics (launches, total time, first wall time, last session) are recomputed from `sessions.tsv` on load; resetting an entry rewrites the file without its sessions.
 
@@ -158,7 +166,16 @@ Card, statistics (play time, sessions, last played, last session length, last ex
 
 ### 7.2 Statistics page
 
-Totals (play time, sessions, entries played), most played entries and play time per category with bars, recent sessions.
+Tabs switched with L1/R1 (also left/right), changed with a 16 px slide and fade:
+
+| Tab | Content |
+|---|---|
+| Overview | tiles: total play time, sessions, played entries, longest session; play time of this boot; the 4 most recent entries with last played and length |
+| Most played | entries by total time (then sessions), rank, bar relative to the maximum, time and sessions |
+| Categories | play time per category with bars, sessions and entries played; sessions of entries no longer in the catalog under "Removed entries" |
+| Recent | up to 200 sessions, newest first: title, last played, length (or unknown), exit (killed, code) |
+
+List tabs: up/down (wrapping on a fresh press), L2/R2 page, A opens Details of entries still in the catalog. The header shows the total time and session count.
 
 ## 8. Quick settings (START)
 
@@ -181,27 +198,50 @@ Panel from the right over dimmed Home: brightness (5 to 100 %, sysfs, writable b
 | Low battery warning | `low_battery` | 0, 10, 15, 20, 30 (toast at the level and at 5 %) |
 | Report app errors | `report_errors` | 0, 1 |
 | Expert mode | `expert` | 0, 1 |
-| Frame time overlay | `perf_overlay` | 0, 1 |
+| Performance overlay (Expert page) | `perf_overlay` | 0, 1 |
 
 Settings also offers Rescan library, About (version, platform, renderer, gamepad, start-up and library load times, paths, licenses) and, when the profile defines `launcher_script` and `previous_launcher`, Launcher at boot (rewrites the launcher script).
 
 ## 10. Expert mode
 
+Menu: INSPECT (Status, Logs, Processes, Library, Sessions), TOOLS (Performance overlay, HUD for next launch), ACTIONS (Restart kennel, Switch to `previous_launcher`, Sync filesystems).
+
 | Page | Content | Source |
 |---|---|---|
-| Status | kernel, uptime, load, CPU, RAM, swap and zram, storage of `mounts`, battery voltage, current, health and time estimate, chargers, USB gadget state, display and renderer, GPU frequency, kennel timings; output of the profile's `[status]` commands | `/proc`, `statvfs`, `/sys/class/{power_supply,udc,devfreq}` |
-| Logs | profile `[logs]` entries and globs, `kernel_log` output, kennel's own log; monospaced viewer with wrap, horizontal scroll, follow | files |
-| Processes | pid, user, state, CPU % between samples, RSS, command line; SIGTERM or SIGKILL with confirmation (own processes) | `/proc/<pid>` |
-| Library | sources with entry and archive counts, parser messages with file and line, categories, entries without art, commands whose absolute program path is missing | catalog |
-| Sessions | `sessions.tsv`, newest first, with titles | statistics |
-| Toggles | frame time overlay; Gallium HUD (`hud_env`) for the next launch | |
-| Actions | restart kennel, switch to `previous_launcher` (exec in place, stays in the launcher cgroup), sync | |
+| Status | text page reloaded every second, sections SYSTEM (hostname, kernel, uptime, load, CPUs and `scaling_cur_freq`, RAM, swap, zram), POWER (capacity, status, health, voltage, current, design capacity, time left while discharging, external power), STORAGE (each of `mounts`), DISPLAY (renderer, logical size, refresh, frame time), GPU (`devfreq` frequencies), USB (UDC states), INPUT (gamepad), KENNEL (version, platform, start-up, library, art textures, text cache), then one section per `[status]` command | `/proc`, `uname`, `statvfs`, `/sys/class/{power_supply,udc,devfreq}` |
+| Logs | menu of `[logs]` entries and `glob=` matches (with sizes), kennel's own log, Kernel (`kernel_log` output, reloaded every 2 s); a log opens as the last 256 KiB of the file, reloaded every second, following the end | files |
+| Processes | PID, user, CPU % between samples, RSS, command line; sampled on open, after 0.5 s, then every 2 s; A on a row: Terminate (SIGTERM) or Kill (SIGKILL), result as a toast | `/proc/<pid>` |
+| Library | Report (sources with entry and archive counts, categories with counts and images, parser messages with file and line, entries without own art per category, absolute command paths that do not exist, load time) and Rescan library | catalog |
+| Sessions | up to 500 sessions, newest first: sequence, boot, length, exit, last played, title | statistics |
+| Performance overlay | frame time, refresh, art textures, cached texts above the bottom bar (saved setting) | |
+| HUD for next launch | prefixes the next launched command with `export <hud_env>;` (goodluckOS `GALLIUM_HUD_VISIBLE=true`); not saved | |
+| Restart kennel | saves state, shuts down, `execv` itself | |
+| Switch to `previous_launcher` | confirmation, then exec in place (stays in the launcher cgroup) | |
+
+Text pages (logs, reports) use JetBrains Mono, strip ANSI escapes and control characters, expand tabs, and wrap by character count. Keys: up/down line, L1/R1 page, L2/R2 top/bottom, Y wrap on/off (off: left/right scroll 8 columns, UTF-8 safe), X follow on/off on reloading pages, B back.
 
 Root operations are limited to what the platform permits (goodluckOS `doas.conf`: `poweroff`, `reboot`, `evsieve`, `appctl`, `umount`). On goodluckOS `dmesg_restrict` is 0, so the kernel log is readable as `player`.
 
 ## 11. Rendering and animation
 
 Screen stack: Home, Details, Quick settings, Dialog, menu pages, text pages, Processes, Statistics. Every screen has a `shown` tween (0 to 1 in 200 ms on open, back to 0 in 160 ms on close); overlays (Quick settings, Dialog) draw over the screen below, and while an opaque screen is still opening the one below is drawn too, which gives a crossfade. A screen is removed when its close finishes; the one below then gets `resumed()` (Home rebuilds its rows).
+
+### 11.1 Start-up
+
+Measured on the device (goodluckOS, 2026-10-21) from process start:
+
+| Step | Time |
+|---|---|
+| `SDL_Init` (video, events) | 41 ms |
+| window and GLES2 renderer (KMSDRM, EGL on lima) | 175 ms |
+| fonts | 22 ms |
+| catalog (32 entries, 12 files) | 5 ms |
+| ready (state restored) | about 250 ms |
+| first frame presented | about 400 ms (masks, icons, stock cards, text of the first screen) |
+
+The gamepad subsystem is initialized after the first frame (its device scan delayed the first frame by about 130 ms); `SDL_HINT_JOYSTICK_HIDAPI` is 0, since the GA36-MB pad is a plain evdev device. The first frame and its cost breakdown are written to the log.
+
+### 11.2 Main loop
 
 Tweens (`anim::Tween`) animate floats with `outCubic` or `inOutQuad`; durations are multiplied by the animation speed (0 jumps). Any tween still moving calls `anim::keepAlive()`; the main loop renders with vsync while that happens and otherwise blocks in `SDL_WaitEventTimeout` until input, a key repeat, a worker result or the next 1 s status poll.
 
@@ -216,6 +256,8 @@ Tweens (`anim::Tween`) animate floats with `outCubic` or `inOutQuad`; durations 
 | image loaded, backdrop change | crossfade | 220 / 350 ms |
 | toast | 12 px drop, alpha; 3.2 s visible | 200 ms |
 | launch | dim, card scale 0.92 to 1 | 180 ms |
+
+`KENNEL_AUTOMATE` (README, "Testing") feeds logical keys and screenshot requests into the main loop for offscreen host runs.
 
 ## 12. Source layout
 
@@ -238,7 +280,7 @@ src/
 third_party/               stb_image.h, qoi.h
 assets/                    fonts, icons (svg sources, 20 and 32 px PNGs)
 platforms/                 goodluckos.ini
-tools/                     kennel-run, launcher-glos.sh
+tools/                     kennel-run, launcher-glos.sh, padinject.c (device test input)
 scripts/                   sysroot.sh, build.sh, icons.sh, testroot.sh, stage-glos.sh, deploy-glos.sh
 ```
 

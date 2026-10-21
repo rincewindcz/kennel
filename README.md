@@ -15,8 +15,8 @@ Design and implementation notes: [docs/DESIGN.md](docs/DESIGN.md).
 | Bottom bar | button hints; dock (SELECT) with Settings, Expert, Statistics, Screen off, Eject card, Restart, Power off; destructive actions ask first |
 | Quick settings | START: brightness, volume, mute, speaker or headphones, shortcuts |
 | Details | X: statistics of the entry, Play, Favorite, Start at boot, last app log, reset statistics; expert: run in terminal, entry internals |
-| Statistics | per entry play time, sessions, last played, last exit code; statistics screen; error report when an app exits with a failure code |
-| Expert mode | system status, logs (app, launcher, kernel, port logs), processes with terminate/kill, library diagnostics, sessions, frame time overlay, Gallium HUD for the next launch, restart kennel, switch to the previous launcher |
+| Statistics | per entry play time, sessions, last played, last exit code; statistics page with Overview, Most played, Categories and Recent tabs; error report when an app exits with a failure code |
+| Expert mode | Status (live), Logs (platform logs, port logs, kennel, kernel), Processes with terminate/kill, Library report and rescan, Sessions, performance overlay, HUD for the next launch, restart kennel, switch to the previous launcher, sync |
 | Animations | fade, slide and scale only; Normal, Fast or Off; no redraw while idle |
 
 ## Controls
@@ -52,12 +52,19 @@ scripts/build.sh all
 `scripts/testroot.sh` builds `build/testroot`: the goodluckOS system `.puppy` files and icons, the HOME `.puppy` files of the goodluck ports, empty ROM files and a few generated ROM images. It prints the command line:
 
 ```sh
-env -u XDG_CONFIG_HOME -u XDG_DATA_HOME -u XDG_CACHE_HOME \
+env -u XDG_CONFIG_HOME -u XDG_DATA_HOME -u XDG_CACHE_HOME -u XDG_RUNTIME_DIR \
     KENNEL_ROOT=$PWD/build/testroot HOME=$PWD/build/testroot/home/player \
-    KENNEL_ASSETS=$PWD/assets KENNEL_PLATFORM=goodluckos build/host/kennel
+    KENNEL_PLATFORM=goodluckos build/host/kennel
 ```
 
-`KENNEL_ROOT` prefixes absolute library paths (sources, ROM and art directories, icons); `/proc`, `/sys` and `/dev` are never prefixed. Launch commands point at device paths and fail on the host.
+CMake symlinks `assets/`, `platforms/` and `tools/kennel-run` into the build directory, so `build/host/kennel` runs from the repository without `KENNEL_ASSETS`. `KENNEL_ROOT` prefixes absolute library paths (sources, ROM and art directories, icons); `/proc`, `/sys` and `/dev` are never prefixed. Launch commands point at device paths and fail on the host.
+
+| Variable | Meaning |
+|---|---|
+| `KENNEL_PLATFORM` | platform id (searched as `<id>.ini` in `<exe dir>/platforms` and `<exe dir>/../share/kennel/platforms`) or a path containing `/` |
+| `KENNEL_ROOT` | test tree prefix for absolute library paths |
+| `KENNEL_ASSETS` | asset directory; default `<exe dir>/assets`, then `<exe dir>/../share/kennel/assets` |
+| `KENNEL_AUTOMATE` | development script, section "Testing" |
 
 ## Install on goodluckOS
 
@@ -80,7 +87,35 @@ scripts/deploy-glos.sh               # changed files only (md5 compared on the d
 scripts/deploy-glos.sh --launcher    # also installs tools/launcher-glos.sh as .local/launcher.sh
 ```
 
-Environment: `GLOS_PY` (default `/mnt/ext/r36s/goodluck/tools/glos.py`), `GLOS_PORT` (default `/dev/ttyACM0`). The console transfers about 0.75 MB/s.
+Changed files are pushed into `HOME/ports/.kennel-incoming` and then renamed into place on the same file system: writing over the running binary fails with `ETXTBSY`, a rename does not. The running kennel keeps the old binary until it restarts. Environment: `GLOS_PY` (default `/mnt/ext/r36s/goodluck/tools/glos.py`), `GLOS_PORT` (default `/dev/ttyACM0`). The console transfers about 0.75 MB/s.
+
+## Testing
+
+Host screenshots without a display: `KENNEL_AUTOMATE` runs comma-separated tokens, one every 300 ms; with `SDL_VIDEODRIVER=offscreen` no window is needed.
+
+| Token | Effect |
+|---|---|
+| `up`, `down`, `left`, `right`, `a`, `b`, `x`, `y`, `l1`, `r1`, `l2`, `r2`, `start`, `select` | logical key press (`a` Confirm, `b` Back) |
+| `wait:MS` | pause |
+| `shot:PATH` | save the next frame as BMP |
+| `quit` | exit |
+
+```sh
+env -u XDG_CONFIG_HOME -u XDG_DATA_HOME -u XDG_CACHE_HOME -u XDG_RUNTIME_DIR SDL_VIDEODRIVER=offscreen \
+    KENNEL_ROOT=$PWD/build/testroot HOME=$PWD/build/testroot/home/player KENNEL_PLATFORM=goodluckos \
+    KENNEL_AUTOMATE="wait:600,shot:/tmp/home.bmp,down,wait:900,shot:/tmp/row.bmp,x,wait:600,shot:/tmp/details.bmp,quit" \
+    build/host/kennel
+```
+
+On the device, `tools/padinject.c` writes evdev button presses to `/dev/input/event2` (the GA36-MB gamepad; `-d DEVICE` for another), so kennel can be driven over the serial console. Buttons: `a b x y l1 r1 l2 r2 select start mode l3 r3 up down left right`, optionally `NAME:HOLD_MS` (default 80 ms); `wait:MS` pauses. `a` is `BTN_EAST`, which `SDL_GAMECONTROLLERCONFIG` maps to the south button (Confirm).
+
+```sh
+clang --target=arm-linux-gnueabihf --sysroot=build/sysroot-armhf -march=armv7-a -mfpu=neon-vfpv4 \
+    -mfloat-abi=hard -fuse-ld=lld -O2 -o build/tools/padinject tools/padinject.c
+glos.py push build/tools/padinject /root/bin
+glos.py sh '/root/bin/padinject down down right a'
+glos.py sh '/root/bin/drmshot > /tmp/shot.ppm'      # screen capture, drmshot from the goodluck tree
+```
 
 ## Files
 
@@ -90,7 +125,7 @@ Environment: `GLOS_PY` (default `/mnt/ext/r36s/goodluck/tools/glos.py`), `GLOS_P
 | `$XDG_DATA_HOME/kennel/` (default `~/.local/share/kennel`) | `sessions.tsv`, `favorites`, `boot`, `journal` |
 | `$XDG_CACHE_HOME/kennel/art/` (default `~/.cache/kennel`) | QOI thumbnails and backdrops, keyed by path, size and mtime |
 | `$XDG_RUNTIME_DIR/kennel/`, else `/dev/shm/kennel-UID`, else `/tmp/kennel-UID` | `state` (row and entry to restore), `kennel.log` |
-| next to the binary, or `KENNEL_ASSETS` | `assets/` (fonts, icons), `platforms/` |
+| next to the binary (symlinks in the CMake build directory), or `KENNEL_ASSETS` | `assets/` (fonts, icons), `platforms/`, `kennel-run` |
 
 ## Library: .puppy files
 
@@ -107,7 +142,7 @@ Images close to 3:2 and at least half the card size cover the card; smaller or o
 
 ## Statistics
 
-Every launch runs the command through `kennel-run JOURNAL ID COMMAND`, which appends a start record (boot id, uptime, wall time, entry id) and an end record (uptime, wall time, exit status) to `journal`. On start kennel folds the journal into `sessions.tsv`:
+Every launch runs the command through `kennel-run JOURNAL ID COMMAND`, which appends a start record (boot id, uptime, wall time, entry id) and an end record (uptime, wall time, exit status) to `journal`. The command runs as an asynchronous child with the original stdin passed through fd 3 (terminal entries keep the console); the wrapper forwards SIGTERM, SIGINT and SIGHUP to it and waits until it is gone. On start kennel folds the journal into `sessions.tsv`:
 
 | Case | Session |
 |---|---|
@@ -119,7 +154,7 @@ Every launch runs the command through `kennel-run JOURNAL ID COMMAND`, which app
 
 ## Platform profiles
 
-`platforms/<id>.ini`, chosen by `ID` in `/etc/os-release`, or by `KENNEL_PLATFORM` (a name in `platforms/`, or a path). Without a profile: built-in defaults (sources `~/.config/kennel/apps.puppy` and `~/.config/kennel/apps/*.puppy`, exec launch, windowed).
+`platforms/<id>.ini`, chosen by `ID` in `/etc/os-release` or by `KENNEL_PLATFORM` (an id or a path), searched in `<exe dir>/platforms` and `<exe dir>/../share/kennel/platforms`. Without a profile: built-in defaults (sources `~/.config/kennel/apps.puppy` and `~/.config/kennel/apps/*.puppy`, exec launch, windowed).
 
 `[platform]`:
 
@@ -134,6 +169,7 @@ Every launch runs the command through `kennel-run JOURNAL ID COMMAND`, which app
 | `mixer_card`, `mixer_volume`, `mixer_output_switch` | ALSA card, volume control, speaker switch |
 | `sources` | `.puppy` files and globs, `;`-separated, `~` is HOME |
 | `hide_categories` | categories hidden until changed in Settings |
+| `tail_categories` | categories placed after all others (system and tool categories) |
 | `autolaunch` | file appd runs once at boot (Puppy format) |
 | `app_log` | log of the last app |
 | `system_icons` | directory with `<category>.png` images |

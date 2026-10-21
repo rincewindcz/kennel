@@ -288,11 +288,11 @@ void HomeScreen::drawBackdrop() {
         if (!le || a <= 0) return;
         float ready = 0;
         SDL_Texture* tex = art.backdrop(*le, categoryOf(*le), ready);
-        if (tex) gfx.image(tex, {-20, -20, gfx.W + 40, gfx.H + 40}, a * ready * 0.55f);
+        if (tex) gfx.image(tex, {-20, -20, gfx.W + 40, gfx.H + 40}, a * ready * 0.5f);
     };
     if (t < 1) layer(prevBackdropId_, 1 - t);
     layer(backdropId_, t);
-    gfx.gradient({0, 0, gfx.W, gfx.H}, rgb(0x0a0c11, 0.35f), rgb(0x0a0c11, 0.85f));
+    gfx.gradient({0, 0, gfx.W, gfx.H}, rgb(0x0a0c11, 0.55f), rgb(0x0a0c11, 0.88f));
 }
 
 void HomeScreen::drawHeader(const Row& row, float dy, float alpha) {

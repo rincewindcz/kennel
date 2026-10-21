@@ -49,6 +49,7 @@ public:
     void round(const SDL_FRect& r, float radius, Color c);
     void stroke(const SDL_FRect& r, float radius, float width, Color c);
     void shadow(const SDL_FRect& r, float radius, float blur, Color c);
+    void glow(const SDL_FRect& r, Color c);
     void image(SDL_Texture* t, const SDL_FRect& dst, float alpha = 1.f, const SDL_FRect* src = nullptr);
     void icon(std::string_view name, float x, float y, float size, Color c);
 
@@ -74,10 +75,11 @@ public:
     uint64_t frame = 0;
     double frameMs = 0, frameMsAvg = 0;
     size_t textCount() const { return texts_.size(); }
+    double maskMs = 0, iconMs = 0, textMs = 0;
 
 private:
     struct CachedText {
-        TTF_Text* text;
+        SDL_Texture* tex;
         int w, h;
         uint64_t used;
     };
@@ -86,7 +88,6 @@ private:
     SDL_Texture* mask(int kind, int a, int b);
     void nineGrid(SDL_Texture* t, float corner, const SDL_FRect& dst, Color c);
 
-    TTF_TextEngine* engine_ = nullptr;
     TTF_Font* fonts_[(int)Font::Count] = {};
     std::unordered_map<std::string, CachedText> texts_;
     std::unordered_map<uint64_t, SDL_Texture*> masks_;

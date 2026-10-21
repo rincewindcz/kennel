@@ -32,6 +32,7 @@ float roundBoxDistance(float px, float py, float half, float r) {
 }  // namespace
 
 bool Gfx::init(int logicalW, int logicalH, bool fullscreen) {
+    uint64_t t0 = SDL_GetTicksNS();
     SDL_WindowFlags flags = fullscreen ? SDL_WINDOW_FULLSCREEN : 0;
     window = SDL_CreateWindow("kennel", logicalW, logicalH, flags);
     if (!window) {
@@ -52,12 +53,12 @@ bool Gfx::init(int logicalW, int logicalH, bool fullscreen) {
     if (const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(window)))
         if (mode->refresh_rate > 0) refresh = mode->refresh_rate;
     SDL_HideCursor();
+    uint64_t t1 = SDL_GetTicksNS();
 
     if (!TTF_Init()) {
         logf("TTF_Init: %s", SDL_GetError());
         return false;
     }
-    engine_ = TTF_CreateRendererTextEngine(renderer);
     std::vector<TTF_Font*> fallbacks;
     for (int i = 0; i < (int)Font::Count; ++i) {
         std::string path = paths.asset(std::string("fonts/") + kFonts[i].file);
@@ -66,7 +67,7 @@ bool Gfx::init(int logicalW, int logicalH, bool fullscreen) {
             logf("font %s: %s", path.c_str(), SDL_GetError());
             return false;
         }
-        TTF_SetFontHinting(fonts_[i], TTF_HINTING_LIGHT);
+        TTF_SetFontHinting(fonts_[i], TTF_HINTING_NONE);
         for (const auto& fb : platform.fallbackFonts) {
             if (TTF_Font* f = TTF_OpenFont(paths.expand(fb).c_str(), kFonts[i].size)) {
                 TTF_AddFallbackFont(fonts_[i], f);
@@ -74,15 +75,15 @@ bool Gfx::init(int logicalW, int logicalH, bool fullscreen) {
             }
         }
     }
-    logf("renderer %s, %dx%d logical, %.1f Hz", rendererName.c_str(), logicalW, logicalH, refresh);
+    logf("renderer %s, %dx%d logical, %.1f Hz (window %.0f ms, fonts %.0f ms)", rendererName.c_str(), logicalW, logicalH,
+         refresh, (t1 - t0) / 1e6, (SDL_GetTicksNS() - t1) / 1e6);
     return true;
 }
 
 void Gfx::shutdown() {
-    for (auto& [k, t] : texts_) TTF_DestroyText(t.text);
+    for (auto& [k, t] : texts_)
+        if (t.tex) SDL_DestroyTexture(t.tex);
     texts_.clear();
-    if (engine_) TTF_DestroyRendererTextEngine(engine_);
-    engine_ = nullptr;
     for (auto& f : fonts_)
         if (f) TTF_CloseFont(f), f = nullptr;
     masks_.clear();
@@ -108,7 +109,7 @@ void Gfx::endFrame() {
     if (texts_.size() > 400) {
         for (auto it = texts_.begin(); it != texts_.end();) {
             if (frame - it->second.used > 120) {
-                TTF_DestroyText(it->second.text);
+                if (it->second.tex) SDL_DestroyTexture(it->second.tex);
                 it = texts_.erase(it);
             } else {
                 ++it;
@@ -140,6 +141,7 @@ SDL_Texture* Gfx::mask(int kind, int a, int b) {
     auto it = masks_.find(key);
     if (it != masks_.end()) return it->second;
 
+    uint64_t t0 = SDL_GetTicksNS();
     int r = a;
     int pad = kind == kShadow ? b : 0;
     float half = r + 2.f;  // corner cells of r + 1 pixels leave a uniform 2-pixel middle
@@ -162,6 +164,7 @@ SDL_Texture* Gfx::mask(int kind, int a, int b) {
     }
     SDL_Texture* t = texture(img);
     masks_[key] = t;
+    maskMs += (SDL_GetTicksNS() - t0) / 1e6;
     return t;
 }
 
@@ -187,9 +190,30 @@ void Gfx::stroke(const SDL_FRect& r, float radius, float width, Color c) {
 void Gfx::shadow(const SDL_FRect& r, float radius, float blur, Color c) {
     int rad = (int)std::floor(std::min({radius, r.w / 2 - 1, r.h / 2 - 1}));
     rad = std::max(rad, 1);
-    int b = std::max(1, (int)std::lround(blur));
+    int b = std::max(4, (int)std::lround(blur / 4) * 4);  // few distinct masks
     SDL_FRect dst{r.x - b, r.y - b, r.w + 2 * b, r.h + 2 * b};
     nineGrid(mask(kShadow, rad, b), rad + 1.f + b, dst, c);
+}
+
+void Gfx::glow(const SDL_FRect& r, Color c) {
+    SDL_Texture*& t = masks_[(uint64_t)4 << 48];
+    if (!t) {
+        Image img;
+        img.w = img.h = 64;
+        img.px.assign(64 * 64 * 4, 255);
+        for (int y = 0; y < 64; ++y)
+            for (int x = 0; x < 64; ++x) {
+                float dx = (x + 0.5f) / 32 - 1, dy = (y + 0.5f) / 32 - 1;
+                float d = std::min(1.f, std::sqrt(dx * dx + dy * dy));
+                float a = (1 - d) * (1 - d);
+                img.px[(y * 64 + x) * 4 + 3] = (uint8_t)std::lround(a * 255);
+            }
+        t = texture(img);
+    }
+    if (!t || c.a <= 0) return;
+    SDL_SetTextureColorModFloat(t, c.r, c.g, c.b);
+    SDL_SetTextureAlphaModFloat(t, c.a);
+    SDL_RenderTexture(renderer, t, nullptr, &r);
 }
 
 void Gfx::image(SDL_Texture* t, const SDL_FRect& dst, float alpha, const SDL_FRect* src) {
@@ -207,10 +231,12 @@ void Gfx::icon(std::string_view name, float x, float y, float size, Color c) {
     std::string key = std::to_string(bucket) + "/" + std::string(name);
     auto it = icons_.find(key);
     if (it == icons_.end()) {
+        uint64_t t0 = SDL_GetTicksNS();
         Image img;
         SDL_Texture* t = loadImage(paths.asset("icons/" + key + ".png"), img) ? texture(img) : nullptr;
         if (!t) logf("missing icon %s", key.c_str());
         it = icons_.emplace(key, t).first;
+        iconMs += (SDL_GetTicksNS() - t0) / 1e6;
     }
     if (!it->second || c.a <= 0) return;
     SDL_SetTextureColorModFloat(it->second, c.r, c.g, c.b);
@@ -226,9 +252,22 @@ Gfx::CachedText& Gfx::cachedText(Font f, std::string_view s) {
     key += s;
     auto it = texts_.find(key);
     if (it == texts_.end()) {
-        TTF_Text* t = TTF_CreateText(engine_, fonts_[(int)f], s.data(), s.size());
+        // One texture per string: the SDL_ttf renderer text engine costs about 6 ms per text object
+        // on Mali-400 (atlas updates stall the GPU), a small new texture about 1 ms.
+        uint64_t t0 = SDL_GetTicksNS();
+        SDL_Texture* t = nullptr;
         int w = 0, h = 0;
-        if (t) TTF_GetTextSize(t, &w, &h);
+        if (SDL_Surface* surf = TTF_RenderText_Blended(fonts_[(int)f], s.data(), s.size(), {255, 255, 255, 255})) {
+            t = SDL_CreateTextureFromSurface(renderer, surf);
+            w = surf->w;
+            h = surf->h;
+            SDL_DestroySurface(surf);
+            if (t) {
+                SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+                SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
+            }
+        }
+        textMs += (SDL_GetTicksNS() - t0) / 1e6;
         it = texts_.emplace(std::move(key), CachedText{t, w, h, frame}).first;
     }
     it->second.used = frame;
@@ -265,10 +304,12 @@ float Gfx::text(Font f, std::string_view s, float x, float y, Color c, float max
         s = clipped;
     }
     CachedText& t = cachedText(f, s);
-    if (!t.text) return 0;
+    if (!t.tex) return 0;
     float dx = align == Align::Center ? -t.w / 2.f : align == Align::Right ? -(float)t.w : 0.f;
-    TTF_SetTextColorFloat(t.text, c.r, c.g, c.b, c.a);
-    TTF_DrawRendererText(t.text, std::round(x + dx), std::round(y));
+    SDL_SetTextureColorModFloat(t.tex, c.r, c.g, c.b);
+    SDL_SetTextureAlphaModFloat(t.tex, c.a);
+    SDL_FRect dst{std::round(x + dx), std::round(y), (float)t.w, (float)t.h};
+    SDL_RenderTexture(renderer, t.tex, nullptr, &dst);
     return (float)t.w;
 }
 

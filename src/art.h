@@ -39,6 +39,7 @@ public:
     bool busy();
     void clear();
     size_t textureCount() const { return slots_.size(); }
+    double composeMs = 0;
 
 private:
     enum Kind { kCover, kBackdrop };

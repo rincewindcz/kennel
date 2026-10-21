@@ -29,11 +29,18 @@ for f in "${files[@]}"; do
     changed[$dir]+="$stage/$f"$'\n'
 done
 
+# Files go to a directory on the same filesystem first and are renamed into place: writing over
+# the running binary fails with ETXTBSY, a rename does not.
+incoming=$home/ports/.kennel-incoming
 for dir in "${!changed[@]}"; do
     mapfile -t list < <(printf '%s' "${changed[$dir]}")
-    glos push "${list[@]}" "$home/$dir"
+    glos push "${list[@]}" "$incoming/$dir"
 done
-[[ ${#changed[@]} -eq 0 ]] && echo "device up to date"
+if ((${#changed[@]})); then
+    glos sh "cd $incoming && find . -type f | while read -r f; do mkdir -p \"$home/\${f%/*}\" && mv -f \"\$f\" \"$home/\$f\"; done; cd / && rm -rf $incoming" >/dev/null
+else
+    echo "device up to date"
+fi
 
 if ((launcher)); then
     tmp=$(mktemp -d)

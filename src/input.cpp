@@ -3,7 +3,6 @@
 #include <cmath>
 #include <cstdlib>
 
-#include "anim.h"
 #include "settings.h"
 #include "util.h"
 
@@ -12,6 +11,10 @@ Input input;
 namespace {
 constexpr double kRepeatDelay = 0.35, kRepeatRate = 0.06, kFastRate = 0.03, kFastAfter = 2.0;
 constexpr int kStickPress = 16000, kStickRelease = 8000, kTriggerPress = 16000;
+
+// Events are handled before the frame clock advances past a blocking wait, so input reads the clock
+// itself.
+double clockNow() { return SDL_GetTicksNS() / 1e9; }
 
 bool repeats(Key k) {
     return k == Key::Up || k == Key::Down || k == Key::Left || k == Key::Right || k == Key::L1 || k == Key::R1;
@@ -68,7 +71,7 @@ void Input::press(Key k, std::vector<KeyEvent>& out) {
     out.push_back({k, false});
     if (repeats(k)) {
         held_ = k;
-        heldSince_ = anim::now();
+        heldSince_ = clockNow();
         nextRepeat_ = heldSince_ + kRepeatDelay;
     }
 }
@@ -144,7 +147,7 @@ void Input::handle(const SDL_Event& ev, std::vector<KeyEvent>& out) {
 
 void Input::tick(std::vector<KeyEvent>& out) {
     if (held_ == Key::None) return;
-    double now = anim::now();
+    double now = clockNow();
     if (now < nextRepeat_) return;
     out.push_back({held_, true});
     nextRepeat_ = now + (now - heldSince_ > kFastAfter ? kFastRate : kRepeatRate);
@@ -152,7 +155,7 @@ void Input::tick(std::vector<KeyEvent>& out) {
 
 int Input::timeoutMs() const {
     if (held_ == Key::None) return -1;
-    return std::max(0, (int)std::ceil((nextRepeat_ - anim::now()) * 1000));
+    return std::max(0, (int)std::ceil((nextRepeat_ - clockNow()) * 1000));
 }
 
 std::string Input::label(Key k) const {

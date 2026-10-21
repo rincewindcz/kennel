@@ -14,7 +14,7 @@ Color accent(float a) { return rgb(settings.accentColor(), a); }
 
 void drawBackground(float alpha) {
     gfx.gradient({0, 0, gfx.W, gfx.H}, fade(theme::bgTop, alpha), fade(theme::bgBottom, alpha));
-    gfx.shadow({-120, -160, 420, 260}, 120, 120, accent(0.10f * alpha));
+    gfx.glow({-260, -300, 700, 560}, accent(0.16f * alpha));
 }
 
 void drawPageHeader(const std::string& icon, const std::string& title, const std::string& subtitle, float alpha) {
@@ -225,7 +225,7 @@ void Menu::draw(const SDL_FRect& area, float alpha) {
             case MenuItem::Type::Toggle: {
                 bool on = m.getBool();
                 SDL_FRect track{right - 38, mid - 11, 38, 22};
-                gfx.round(track, 11, on ? accent(alpha) : fade(theme::line, alpha));
+                gfx.round(track, 11, on ? accent(alpha) : fade(rgb(0x4a5263), alpha));
                 gfx.round({on ? track.x + 19 : track.x + 3, track.y + 3, 16, 16}, 8, fade(rgb(0xffffff), alpha));
                 break;
             }

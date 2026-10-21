@@ -309,6 +309,7 @@ SDL_Texture* ArtCache::scrim() {
 }
 
 SDL_Texture* ArtCache::compose(const Entry& e, const Category* c, SDL_Texture* icon, int iconW, int iconH) {
+    uint64_t t0 = SDL_GetTicksNS();
     SDL_Texture* t = gfx.target(kW, kH);
     if (!t) return nullptr;
     SDL_Texture* prev = SDL_GetRenderTarget(gfx.renderer);
@@ -347,5 +348,6 @@ SDL_Texture* ArtCache::compose(const Entry& e, const Category* c, SDL_Texture* i
     }
 
     gfx.setTarget(prev);
+    composeMs += (SDL_GetTicksNS() - t0) / 1e6;
     return t;
 }
