@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "paths.h"
 #include "platform.h"
@@ -112,8 +113,40 @@ void System::readBattery() {
     }
 }
 
+void System::readCpu() {
+    // cpu  user nice system idle iowait irq softirq steal ...
+    std::string line = readLine("/proc/stat");
+    if (line.rfind("cpu ", 0) != 0) return;
+    unsigned long long v[8] = {}, total = 0;
+    const char* p = line.c_str() + 4;
+    for (int i = 0; i < 8; ++i) {
+        char* end;
+        v[i] = strtoull(p, &end, 10);
+        if (end == p) break;
+        total += v[i];
+        p = end;
+    }
+    unsigned long long busy = total - v[3] - v[4];
+    if (cpuTotal_ && total > cpuTotal_)
+        cpuPercent = (int)std::lround((busy - cpuBusy_) * 100.0 / (total - cpuTotal_));
+    cpuBusy_ = busy;
+    cpuTotal_ = total;
+}
+
+void System::readMemory() {
+    std::string meminfo = readFile("/proc/meminfo").value_or("");
+    auto field = [&](const char* key) -> uint64_t {
+        size_t at = meminfo.find(key);
+        return at == std::string::npos ? 0 : strtoull(meminfo.c_str() + at + strlen(key), nullptr, 10) * 1024;
+    };
+    memTotal = field("MemTotal:");
+    memAvailable = field("MemAvailable:");
+}
+
 bool System::poll() {
     readBattery();
+    readCpu();
+    readMemory();
     externalMounted = false;
     if (!platform.externalMount.empty()) {
         std::string mounts = readFile("/proc/mounts").value_or("");
@@ -125,8 +158,9 @@ bool System::poll() {
 #ifdef KENNEL_ALSA
     refreshMixer();
 #endif
-    std::string sig = strprintf("%d|%s|%d|%d|%d|%d|%d", battery.capacity, battery.status.c_str(), battery.externalPower,
-                                externalMounted, usbConnected, hasVolume() ? volume() : -1, hasOutputSwitch() ? speaker() : -1);
+    std::string sig = strprintf("%d|%s|%d|%d|%d|%d|%d|%d|%llu", battery.capacity, battery.status.c_str(), battery.externalPower,
+                                externalMounted, usbConnected, hasVolume() ? volume() : -1, hasOutputSwitch() ? speaker() : -1,
+                                cpuPercent, (unsigned long long)(memAvailable >> 20));
     if (hasMute()) sig += muted() ? "|m" : "|u";
     bool changed = sig != signature_;
     signature_ = sig;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 struct Battery {
@@ -22,8 +23,11 @@ public:
     bool poll();  // true when anything shown in the top bar changed
 
     Battery battery;
+    std::string batteryDir() const { return batteryDir_; }
     bool externalMounted = false;
     bool usbConnected = false;
+    int cpuPercent = -1;  // busy share of all cores since the previous poll
+    uint64_t memAvailable = 0, memTotal = 0;
 
     bool hasBacklight() const { return maxBrightness_ > 0; }
     int maxBrightness() const { return (int)maxBrightness_; }
@@ -45,7 +49,10 @@ public:
 
 private:
     void readBattery();
+    void readCpu();
+    void readMemory();
     std::string signature_;
+    unsigned long long cpuBusy_ = 0, cpuTotal_ = 0;
     long maxBrightness_ = 0;
     long savedBrightness_ = -1;
     std::string batteryDir_;

@@ -33,6 +33,15 @@ struct Category {
     std::vector<int> entries;
 };
 
+// An [ARCHIVE] section: the files it lists and the command that opens them.
+struct ArchiveRule {
+    std::string category;
+    std::vector<std::string> extensions;   // lower case, no dot; empty matches every file
+    std::vector<std::string> directories;  // expanded
+    std::string command;                   // COMMAND, %s is the quoted file
+    uint32_t color = 0;
+};
+
 struct CatalogSource {
     std::string path;
     bool loaded = false;
@@ -51,12 +60,16 @@ public:
     std::vector<Category> categories;
     std::vector<CatalogSource> sources;
     std::vector<CatalogMessage> messages;
+    std::vector<ArchiveRule> archives;
     double loadMs = 0;
 
     void load();
     int indexOf(const std::string& id) const;
     const Entry* find(const std::string& id) const;
     const Category* category(const std::string& name) const;
+    // Entries that open the file at an absolute path: its library entry, else one per archive that
+    // takes its extension, preferring archives whose directories hold the file.
+    std::vector<Entry> entriesForFile(const std::string& path) const;
 };
 
 std::string cleanTitle(const std::string& stem, std::string* tags);

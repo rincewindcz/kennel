@@ -45,6 +45,12 @@ void Settings::load(const std::string& file) {
     flag("show_favorites", showFavorites);
     flag("expert", expert);
     flag("perf_overlay", perfOverlay);
+    flag("bar_cpu", barCpu);
+    flag("bar_memory", barMemory);
+    flag("bar_volume", barVolume);
+    flag("bar_battery", barBattery);
+    flag("bar_card", barCard);
+    flag("bar_usb", barUsb);
     if (const IniEntry* e = s->find("hidden")) {
         hidden = split(e->value, ';');
         hiddenInitialized = true;
@@ -75,6 +81,8 @@ bool Settings::save() const {
     out += strprintf("show_favorites=%d\n", showFavorites);
     out += strprintf("expert=%d\n", expert);
     out += strprintf("perf_overlay=%d\n", perfOverlay);
+    out += strprintf("bar_cpu=%d\nbar_memory=%d\nbar_volume=%d\n", barCpu, barMemory, barVolume);
+    out += strprintf("bar_battery=%d\nbar_card=%d\nbar_usb=%d\n", barBattery, barCard, barUsb);
     out += "hidden=" + join(hidden) + "\n";
     out += "order=" + join(order) + "\n";
     return writeFileAtomic(path, out);

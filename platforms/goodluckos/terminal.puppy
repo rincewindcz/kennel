@@ -1,0 +1,6 @@
+# Terminal with an on-screen keyboard, from kennel. Copy to ~/.local/share/applications/.
+[ENTRY]
+CATEGORY=Terminal
+NAME=Terminal
+DESCRIPTION=Shell with an on-screen keyboard and command suggestions
+COMMAND=/home/player/ports/kennel/kennel-term

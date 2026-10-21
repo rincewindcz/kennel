@@ -1,5 +1,6 @@
 #include "panels.h"
 
+#include "battery.h"
 #include "platform.h"
 #include "settings.h"
 #include "system.h"
@@ -9,10 +10,18 @@ namespace {
 constexpr float kPanelW = 320;
 }
 
-QuickPanel::QuickPanel() {
+MenuPanel::MenuPanel(std::string title, std::vector<MenuItem> items, bool closeOnAction)
+    : title_(std::move(title)), closeOnAction_(closeOnAction) {
     menu_.compact = true;
     menu_.rowHeight = 38;
+    menu_.items = std::move(items);
+    menu_.fixSelection();
+}
+
+QuickPanel::QuickPanel() : MenuPanel("Quick settings", {}, false) {
     auto& m = menu_.items;
+    if (sys.battery.capacity >= 0)
+        m.push_back(items::info("battery-full", "Battery", [] { return describeEstimate(sys.battery, batteryLog.estimate(sys.battery)); }));
     if (sys.hasBacklight())
         m.push_back(items::level("sun", "Brightness", sys.maxBrightness(), [] { return sys.brightness(); },
                                  [](int v) { sys.setBrightness(v); }));
@@ -26,9 +35,13 @@ QuickPanel::QuickPanel() {
         m.push_back(items::choice("headphones", "Output", {"Speaker", "Headphones"}, [] { return sys.speaker() ? 0 : 1; },
                                   [](int v) { sys.setSpeaker(v == 0); }));
     m.push_back(items::header("GO TO"));
+    m.push_back(items::link("folder", "Files", [] { app.openFiles(); }));
     m.push_back(items::link("chart-column", "Statistics", [] { app.openStatistics(); }));
     m.push_back(items::link("settings", "Settings", [] { app.openSettings(); }));
-    if (settings.expert) m.push_back(items::link("terminal", "Expert", [] { app.openExpert(); }));
+    if (settings.expert) {
+        m.push_back(items::link("wrench", "Expert", [] { app.openExpert(); }));
+        m.push_back(items::link("terminal", "Terminal", [] { app.openTerminal(); }));
+    }
     if (sys.hasBacklight()) m.push_back(items::action("monitor-off", "Screen off", [this] {
         close();
         app.screenOff();
@@ -36,28 +49,28 @@ QuickPanel::QuickPanel() {
     menu_.fixSelection();
 }
 
-void QuickPanel::input(const KeyEvent& ev) {
+void MenuPanel::input(const KeyEvent& ev) {
     if (ev.key == Key::Back || ev.key == Key::Start) {
         close();
         return;
     }
     if (ev.key == Key::Confirm) {
         const MenuItem* m = menu_.current();
-        if (m && m->type == MenuItem::Type::Link) close();
+        if (m && (m->type == MenuItem::Type::Link || (closeOnAction_ && m->type == MenuItem::Type::Action))) close();
     }
     menu_.input(ev);
     app.dirty = true;
 }
 
-std::vector<Hint> QuickPanel::hints() const { return {{Key::Confirm, "Select"}, {Key::Back, "Close"}}; }
+std::vector<Hint> MenuPanel::hints() const { return {{Key::Confirm, "Select"}, {Key::Back, "Close"}}; }
 
-void QuickPanel::draw() {
+void MenuPanel::draw() {
     float t = shown.value;
     gfx.fill({0, 0, gfx.W, gfx.H}, rgb(0, 0.5f * t));
     float x = gfx.W - kPanelW * t;
     SDL_FRect r{x, 0, kPanelW + 20, gfx.H};
     gfx.shadow(r, 2, 20, rgb(0, 0.6f * t));
     gfx.fill(r, fade(theme::panel, 0.98f));
-    gfx.text(Font::Bold, "Quick settings", x + 22, 44, fade(theme::text, t));
+    gfx.text(Font::Bold, title_, x + 22, 44, fade(theme::text, t), kPanelW - 44);
     menu_.draw({x + 8, 76, kPanelW - 16, gfx.H - 76 - 44}, t);
 }

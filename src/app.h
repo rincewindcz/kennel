@@ -80,6 +80,8 @@ public:
     void openExpert();
     void openStatistics();
     void openLog(const std::string& title, const std::string& path);
+    void openFiles(const std::string& dir = {}, const std::string& select = {});
+    void openTerminal(const std::string& cwd = {}, const std::string& command = {});
 
     Catalog catalog;
     Stats stats;

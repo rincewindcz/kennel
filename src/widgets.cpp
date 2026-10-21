@@ -8,7 +8,21 @@
 
 namespace {
 constexpr float kBottom = 36;
+
+size_t prevChar(const std::string& s, size_t i) {
+    if (i == 0) return 0;
+    --i;
+    while (i > 0 && ((unsigned char)s[i] & 0xc0) == 0x80) --i;
+    return i;
 }
+
+size_t nextChar(const std::string& s, size_t i) {
+    if (i >= s.size()) return s.size();
+    ++i;
+    while (i < s.size() && ((unsigned char)s[i] & 0xc0) == 0x80) ++i;
+    return i;
+}
+}  // namespace
 
 
 void drawBackground(float alpha) {
@@ -143,4 +157,73 @@ void DialogScreen::draw() {
         gfx.text(Font::Bold, buttons_[i].label, b.x + b.w / 2, b.y + (40 - gfx.lineHeight(Font::Bold)) / 2,
                  fade(sel ? rgb(0x0b0d12) : theme::text, t), bw - 16, Align::Center);
     }
+}
+
+// ------------------------------------------------------------ text input ---
+
+TextInputScreen::TextInputScreen(std::string title, std::string text, std::function<void(const std::string&)> done)
+    : title_(std::move(title)), text_(std::move(text)), cursor_(text_.size()), done_(std::move(done)) {}
+
+void TextInputScreen::input(const KeyEvent& ev) {
+    switch (ev.key) {
+        case Key::Select: close(); return;
+        case Key::Y:
+            text_.clear();
+            cursor_ = 0;
+            return;
+        case Key::L1: cursor_ = prevChar(text_, cursor_); return;
+        case Key::R1: cursor_ = nextChar(text_, cursor_); return;
+        default: break;
+    }
+    Keyboard::Result r = keyboard_.input(ev);
+    switch (r.action) {
+        case Keyboard::Action::Text:
+            text_.insert(cursor_, r.text);
+            cursor_ += r.text.size();
+            break;
+        case Keyboard::Action::Backspace: {
+            size_t from = prevChar(text_, cursor_);
+            text_.erase(from, cursor_ - from);
+            cursor_ = from;
+            break;
+        }
+        case Keyboard::Action::Enter: {
+            auto done = done_;
+            std::string text = text_;
+            close();
+            if (done) done(text);
+            break;
+        }
+        default: break;
+    }
+}
+
+std::vector<Hint> TextInputScreen::hints() const {
+    return {{Key::Back, "Delete"}, {Key::X, "Space"}, {Key::Y, "Clear"}, {Key::Start, "Done"}, {Key::Select, "Cancel"}};
+}
+
+void TextInputScreen::draw() {
+    float t = shown.value;
+    gfx.fill({0, 0, gfx.W, gfx.H}, rgb(0, 0.6f * t));
+    float kh = keyboard_.height();
+    float ky = gfx.H - kBottom - kh + 30 * (1 - t);
+    SDL_FRect panel{16, 44, gfx.W - 32, 92};
+    gfx.shadow(panel, 14, 18, rgb(0, 0.5f * t));
+    gfx.round(panel, 14, fade(theme::panel, t));
+    gfx.text(Font::SmallBold, title_, panel.x + 18, panel.y + 12, fade(theme::dim, t), panel.w - 36);
+    SDL_FRect field{panel.x + 14, panel.y + 40, panel.w - 28, 38};
+    gfx.round(field, 9, fade(rgb(0x07090d), 0.8f * t));
+    gfx.stroke(field, 9, 1, accent(0.6f * t));
+
+    // Keep the cursor visible: scroll the text left when it would pass the right edge.
+    float maxW = field.w - 24;
+    float before = gfx.measure(Font::Body, std::string_view(text_).substr(0, cursor_));
+    float shift = std::max(0.f, before - maxW);
+    gfx.pushClip({field.x + 8, field.y, field.w - 16, field.h});
+    float tx = field.x + 12 - shift, ty = field.y + (field.h - gfx.lineHeight(Font::Body)) / 2;
+    if (!text_.empty()) gfx.text(Font::Body, text_, tx, ty, fade(theme::text, t));
+    gfx.fill({tx + before, field.y + 8, 2, field.h - 16}, accent(t));
+    gfx.popClip();
+
+    keyboard_.draw({0, ky, gfx.W, kh}, t);
 }

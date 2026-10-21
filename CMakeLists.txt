@@ -17,7 +17,7 @@ find_package(Threads REQUIRED)
 
 find_package(ZLIB REQUIRED)
 
-# Code shared by kennel and kennel-read.
+# Code shared by kennel, kennel-read and kennel-term.
 add_library(kennelcore STATIC
     src/zip.cpp
     src/tokenizer.cpp
@@ -32,6 +32,8 @@ add_library(kennelcore STATIC
     src/gfx.cpp
     src/input.cpp
     src/menu.cpp
+    src/glyphs.cpp
+    src/osk.cpp
 )
 target_include_directories(kennelcore PUBLIC src third_party)
 target_compile_definitions(kennelcore PUBLIC KENNEL_VERSION="${PROJECT_VERSION}")
@@ -53,6 +55,8 @@ add_executable(kennel
     src/menus.cpp
     src/expert.cpp
     src/statsview.cpp
+    src/battery.cpp
+    src/files.cpp
 )
 target_link_libraries(kennel PRIVATE kennelcore)
 
@@ -60,6 +64,11 @@ file(GLOB READ_SOURCES CONFIGURE_DEPENDS src/read/*.cpp)
 add_executable(kennel-read ${READ_SOURCES})
 target_include_directories(kennel-read PRIVATE src/read)
 target_link_libraries(kennel-read PRIVATE kennelcore)
+
+file(GLOB TERM_SOURCES CONFIGURE_DEPENDS src/term/*.cpp)
+add_executable(kennel-term ${TERM_SOURCES})
+target_include_directories(kennel-term PRIVATE src/term)
+target_link_libraries(kennel-term PRIVATE kennelcore)
 
 if(KENNEL_ALSA)
     find_path(ALSA_INCLUDE_DIR alsa/asoundlib.h REQUIRED)
@@ -72,6 +81,7 @@ endif()
 if(KENNEL_STATIC_CXX)
     target_link_options(kennel PRIVATE -static-libstdc++ -static-libgcc)
     target_link_options(kennel-read PRIVATE -static-libstdc++ -static-libgcc)
+    target_link_options(kennel-term PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 
 # Run from the build directory with the repository's data.
@@ -79,9 +89,9 @@ file(CREATE_LINK ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets SYMBOLIC)
 file(CREATE_LINK ${CMAKE_SOURCE_DIR}/platforms ${CMAKE_BINARY_DIR}/platforms SYMBOLIC)
 file(CREATE_LINK ${CMAKE_SOURCE_DIR}/tools/kennel-run ${CMAKE_BINARY_DIR}/kennel-run SYMBOLIC)
 
-install(TARGETS kennel kennel-read DESTINATION .)
+install(TARGETS kennel kennel-read kennel-term DESTINATION .)
 install(PROGRAMS tools/kennel-run DESTINATION .)
-install(DIRECTORY assets/fonts DESTINATION assets)
+install(DIRECTORY assets/fonts assets/term DESTINATION assets)
 install(DIRECTORY assets/icons/20 assets/icons/32 DESTINATION assets/icons)
 install(FILES assets/icons/LICENSE-lucide.txt DESTINATION assets/icons)
 install(DIRECTORY platforms DESTINATION .)

@@ -9,6 +9,7 @@
 #include "gfx.h"
 #include "input.h"
 #include "menu.h"
+#include "osk.h"
 
 // Full-screen list with a title, used by settings, expert mode and their sub-pages.
 class MenuScreen : public Screen {
@@ -44,6 +45,22 @@ private:
     std::string icon_, title_, message_;
     std::vector<DialogButton> buttons_;
     int selected_;
+};
+
+// Single line text entry with the on-screen keyboard. `done` gets the text when START is pressed.
+class TextInputScreen : public Screen {
+public:
+    TextInputScreen(std::string title, std::string text, std::function<void(const std::string&)> done);
+    void input(const KeyEvent& ev) override;
+    void draw() override;
+    bool overlay() const override { return true; }
+    std::vector<Hint> hints() const override;
+
+private:
+    std::string title_, text_;
+    size_t cursor_;
+    std::function<void(const std::string&)> done_;
+    Keyboard keyboard_;
 };
 
 void drawBackground(float alpha = 1.f);

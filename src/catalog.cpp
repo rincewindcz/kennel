@@ -110,6 +110,18 @@ std::string makeId(std::string id) {
     std::replace(id.begin(), id.end(), '\n', ' ');
     return id;
 }
+
+std::string fileCommand(const std::string& tmpl, const std::string& path) {
+    std::string quoted = shellQuote(path);
+    if (tmpl.empty()) return quoted;
+    if (tmpl.find("%s") != std::string::npos) return replaceAll(tmpl, "%s", quoted);
+    return tmpl + " " + quoted;
+}
+
+std::string extensionOf(const std::string& name) {
+    size_t dot = name.rfind('.');
+    return dot == std::string::npos ? "" : lower(name.substr(dot + 1));
+}
 }  // namespace
 
 void Catalog::load() {
@@ -118,6 +130,7 @@ void Catalog::load() {
     categories.clear();
     sources.clear();
     messages.clear();
+    archives.clear();
 
     std::vector<Record> records;
     auto upsert = [&](Record rec) {
@@ -246,6 +259,10 @@ void Catalog::load() {
             if (!x.empty() && x[0] == '.') x.erase(0, 1);
             exts.push_back(lower(x));
         }
+        ArchiveRule rule{name, exts, {}, s.get("COMMAND"), cat.color};
+        for (const auto& dir : split(s.get("ENTRY_DIRECTORIES"), ';'))
+            if (!dir.empty()) rule.directories.push_back(paths.expand(dir));
+        archives.push_back(std::move(rule));
 
         ImageIndex art, icons;
         std::unordered_map<std::string, int> artRank, iconRank;
@@ -267,7 +284,7 @@ void Catalog::load() {
                     if (stat(fpath.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
                 }
                 size_t dot = fname.rfind('.');
-                std::string ext = dot == std::string::npos ? "" : lower(fname.substr(dot + 1));
+                std::string ext = extensionOf(fname);
                 if (!exts.empty() && std::find(exts.begin(), exts.end(), ext) == exts.end()) continue;
 
                 Entry e;
@@ -276,11 +293,7 @@ void Catalog::load() {
                 e.title = cleanTitle(e.name, &e.tags);
                 e.description = cat.description;
                 e.path = dir + "/" + fname;
-                std::string tmpl = s.get("COMMAND");
-                std::string quoted = shellQuote(e.path);
-                if (tmpl.empty()) e.command = quoted;
-                else if (tmpl.find("%s") != std::string::npos) e.command = replaceAll(tmpl, "%s", quoted);
-                else e.command = tmpl + " " + quoted;
+                e.command = fileCommand(s.get("COMMAND"), e.path);
                 e.art = lookupImage(art, e.name);
                 if (e.art.empty()) e.art = lookupImage(icons, e.name);
                 if (e.art.empty() && hasEmbeddedCover(fname)) e.art = fpath;
@@ -327,4 +340,28 @@ const Category* Catalog::category(const std::string& name) const {
     for (const auto& c : categories)
         if (c.name == name) return &c;
     return nullptr;
+}
+
+std::vector<Entry> Catalog::entriesForFile(const std::string& path) const {
+    for (const auto& e : entries)
+        if (e.fromArchive && paths.expand(e.path) == path) return {e};
+    std::string name = baseName(path), dir = dirName(path), ext = extensionOf(name);
+    std::vector<Entry> local, other;
+    for (const auto& r : archives) {
+        bool inDir = std::find(r.directories.begin(), r.directories.end(), dir) != r.directories.end();
+        bool takes = r.extensions.empty() ? inDir : std::find(r.extensions.begin(), r.extensions.end(), ext) != r.extensions.end();
+        if (!takes) continue;
+        Entry e;
+        e.category = r.category;
+        size_t dot = name.rfind('.');
+        e.name = dot == std::string::npos || dot == 0 ? name : name.substr(0, dot);
+        e.title = cleanTitle(e.name, &e.tags);
+        e.path = path;
+        e.command = fileCommand(r.command, path);
+        e.id = makeId("rom:" + path);
+        e.color = r.color;
+        e.fromArchive = true;
+        (inDir ? local : other).push_back(std::move(e));
+    }
+    return local.empty() ? other : local;
 }

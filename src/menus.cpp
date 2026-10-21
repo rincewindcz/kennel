@@ -113,11 +113,29 @@ void App::openSettings() {
                                       settings.animations = (Settings::Animations)v;
                                       save();
                                   }));
-        m.push_back(items::choice("clock", "Top bar time", {"Auto", "Clock", "Uptime", "Off"}, [] { return (int)settings.time; },
-                                  [](int v) {
-                                      settings.time = (Settings::TimeMode)v;
-                                      save();
-                                  }));
+        m.push_back(items::link("sliders-horizontal", "Top bar", [] {
+            app.push(std::make_unique<MenuScreen>("Top bar", "sliders-horizontal", [] {
+                std::vector<MenuItem> t;
+                t.push_back(items::choice("clock", "Time", {"Auto", "Clock", "Uptime", "Off"}, [] { return (int)settings.time; },
+                                          [](int v) {
+                                              settings.time = (Settings::TimeMode)v;
+                                              save();
+                                          }));
+                auto flag = [&](const char* icon, const char* label, bool* value) {
+                    t.push_back(items::toggle(icon, label, [value] { return *value; }, [value](bool v) {
+                        *value = v;
+                        save();
+                    }));
+                };
+                flag("cpu", "CPU load", &settings.barCpu);
+                flag("memory-stick", "Free memory", &settings.barMemory);
+                flag("volume-2", "Volume", &settings.barVolume);
+                flag("battery-full", "Battery", &settings.barBattery);
+                flag("card", "External card", &settings.barCard);
+                flag("usb", "USB connection", &settings.barUsb);
+                return t;
+            }));
+        }));
 
         m.push_back(items::header("LIBRARY"));
         m.push_back(items::choice("arrow-up-down", "Sort games by", {"Name", "Last played", "Play time"},

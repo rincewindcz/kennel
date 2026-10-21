@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "art.h"
+#include "battery.h"
 #include "paths.h"
 #include "platform.h"
 #include "settings.h"
@@ -136,10 +137,12 @@ std::string statusReport() {
         out += kv("Voltage", strprintf("%.3f V", b.voltage));
         out += kv("Current", strprintf("%.3f A", b.current));
         if (b.designCharge > 0) out += kv("Design", strprintf("%.0f mAh", b.designCharge * 1000));
-        if (b.status == "Discharging" && std::fabs(b.current) > 0.001 && b.designCharge > 0) {
-            double hours = b.capacity / 100.0 * b.designCharge / std::fabs(b.current);
-            out += kv("Time left", "about " + formatDuration(hours * 3600));
-        }
+        BatteryEstimate est = batteryLog.estimate(b);
+        if (est.seconds >= 0)
+            out += kv(b.status == "Charging" ? "Until full" : "Time left",
+                      strprintf("about %s (%+.1f%%/h, %s)", formatDuration(est.seconds).c_str(), est.ratePerHour,
+                                est.fromHistory ? "history" : "current"));
+        out += kv("History", strprintf("%zu boots, %s", batteryLog.boots().size(), batteryLog.path().c_str()));
     } else {
         out += kv("Battery", "none");
     }
@@ -500,7 +503,7 @@ void App::openLog(const std::string& title, const std::string& path) {
 }
 
 void App::openExpert() {
-    push(std::make_unique<MenuScreen>("Expert", "terminal", [] {
+    push(std::make_unique<MenuScreen>("Expert", "wrench", [] {
         std::vector<MenuItem> m;
         m.push_back(items::header("INSPECT"));
         m.push_back(items::link("gauge", "Status", [] {
@@ -556,6 +559,8 @@ void App::openExpert() {
         }));
 
         m.push_back(items::header("TOOLS"));
+        m.push_back(items::link("terminal", "Terminal", [] { app.openTerminal(); }));
+        m.push_back(items::link("folder", "Files", [] { app.openFiles("/"); }));
         m.push_back(items::toggle("gauge", "Performance overlay", [] { return settings.perfOverlay; }, [](bool v) {
             settings.perfOverlay = v;
             settings.save();

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Copies build/stage-glos (kennel, kennel-read, the Books entry) to a goodluckOS device over the USB
-# serial console (glos.py, root) and creates ~/books.
+# Copies build/stage-glos (kennel, kennel-read, kennel-term, the Books and Terminal entries) to a
+# goodluckOS device over the USB serial console (glos.py, root) and creates ~/books.
 # Files whose md5 already matches on the device are skipped.
 # Usage: scripts/deploy-glos.sh [--launcher]   --launcher also installs tools/launcher-glos.sh
 #        as /home/player/.local/launcher.sh
@@ -20,7 +20,7 @@ glos() { python3 "$glos_py" --port "$port" --timeout 300 "$@"; }
 
 # md5 of what is already on the device; one short command, the console has a line limit.
 mapfile -t files < <(cd "$stage" && find ports .local -type f | sort)
-remote=$(glos sh "cd $home && { [ -d ports/kennel ] && find ports/kennel -type f | xargs md5sum; md5sum .local/share/applications/books.puppy; } 2>/dev/null; true")
+remote=$(glos sh "cd $home && { [ -d ports/kennel ] && find ports/kennel -type f | xargs md5sum; md5sum .local/share/applications/books.puppy .local/share/applications/terminal.puppy; } 2>/dev/null; true")
 
 declare -A changed=()
 for f in "${files[@]}"; do
@@ -51,5 +51,5 @@ if ((launcher)); then
     glos sh "chmod 755 $home/.local/launcher.sh; chown player:player $home/.local/launcher.sh" >/dev/null
 fi
 
-glos sh "mkdir -p $home/books && chown player:player $home/books $home/.local/share/applications/books.puppy && chown -R player:player $home/ports/kennel && chmod 755 $home/ports/kennel/kennel $home/ports/kennel/kennel-read $home/ports/kennel/kennel-run" >/dev/null
+glos sh "mkdir -p $home/books && chown player:player $home/books $home/.local/share/applications/books.puppy $home/.local/share/applications/terminal.puppy && chown -R player:player $home/ports/kennel && chmod 755 $home/ports/kennel/kennel $home/ports/kennel/kennel-read $home/ports/kennel/kennel-term $home/ports/kennel/kennel-run" >/dev/null
 echo "deployed to $home/ports/kennel"

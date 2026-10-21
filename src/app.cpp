@@ -8,6 +8,8 @@
 #include <unistd.h>
 
 #include "art.h"
+#include "battery.h"
+#include "files.h"
 #include "home.h"
 #include "paths.h"
 #include "platform.h"
@@ -144,10 +146,14 @@ void App::reloadCatalog() {
 // --------------------------------------------------------------- launch ---
 
 std::string App::wrapCommand(const Entry& e) const {
-    const std::string& id = e.id;
+    // Tools (the terminal) are not games: kennel-run records no session for an empty id.
+    std::string id = e.id.rfind("tool:", 0) == 0 ? "" : e.id;
     std::string cmd = e.command;
     if (settings.hudNextLaunch && !platform.hudEnv.empty()) cmd = "export " + platform.hudEnv + "; " + cmd;
-    return shellQuote(paths.exeDir + "/kennel-run") + " " + shellQuote(stats.journal()) + " " + shellQuote(id) + " " +
+    std::string env;
+    if (!sys.batteryDir().empty())
+        env = "KENNEL_BATTERY=" + shellQuote(sys.batteryDir()) + " KENNEL_BATTERY_LOG=" + shellQuote(batteryLog.path()) + " ";
+    return env + shellQuote(paths.exeDir + "/kennel-run") + " " + shellQuote(stats.journal()) + " " + shellQuote(id) + " " +
            shellQuote(cmd);
 }
 
@@ -233,7 +239,30 @@ void App::setAutolaunch(const Entry* e) {
 }
 
 void App::saveState() {
-    if (home) writeFile(paths.runtime + "/state", home->stateString());
+    if (!home) return;
+    std::string state = home->stateString();
+    for (const auto& s : stack_)
+        if (auto* f = dynamic_cast<FileScreen*>(s.get()); f && !f->closing()) state += f->state();
+    writeFile(paths.runtime + "/state", state);
+}
+
+void App::openFiles(const std::string& dir, const std::string& select) {
+    push(std::make_unique<FileScreen>(dir, select));
+}
+
+void App::openTerminal(const std::string& cwd, const std::string& command) {
+    std::string exe = paths.exeDir + "/kennel-term";
+    if (!fileExists(exe)) {
+        toast("kennel-term is not installed", "triangle-alert", theme::bad);
+        return;
+    }
+    Entry e;
+    e.id = "tool:terminal";
+    e.title = "Terminal";
+    e.command = shellQuote(exe);
+    if (!cwd.empty()) e.command += " --cwd " + shellQuote(cwd);
+    if (!command.empty()) e.command += " -e " + shellQuote(command);
+    launch(e);
 }
 
 void App::reportLastSession() {
@@ -272,7 +301,11 @@ void App::checkBattery() {
 std::vector<App::DockItem> App::dockItems() const {
     std::vector<DockItem> out;
     out.push_back({"settings", "Settings", [] { app.openSettings(); }});
-    if (settings.expert) out.push_back({"terminal", "Expert", [] { app.openExpert(); }});
+    if (settings.expert) {
+        out.push_back({"wrench", "Expert", [] { app.openExpert(); }});
+        out.push_back({"terminal", "Terminal", [] { app.openTerminal(); }});
+    }
+    out.push_back({"folder", "Files", [] { app.openFiles(); }});
     out.push_back({"chart-column", "Statistics", [] { app.openStatistics(); }});
     if (sys.hasBacklight()) out.push_back({"monitor-off", "Screen off", [] { app.screenOff(); }});
     if (!platform.eject.empty() && sys.externalMounted) out.push_back({"card", "Eject card", [] { app.eject(); }});
@@ -329,12 +362,54 @@ void App::dispatch(const KeyEvent& ev) {
 
 // ------------------------------------------------------------------ draw ---
 
+namespace {
+std::string compactBytes(uint64_t bytes) {
+    double mb = bytes / 1048576.0;
+    return mb >= 1000 ? strprintf("%.1fG", mb / 1024) : strprintf("%.0fM", mb);
+}
+}  // namespace
+
 void App::drawTopBar() {
     gfx.gradient({0, 0, gfx.W, kTopBar + 8}, rgb(0, 0.6f), rgb(0, 0.f));
     const float cy = kTopBar / 2;
     const float th = gfx.lineHeight(Font::SmallBold);
-    float x = 14;
 
+    // Right to left: battery, volume, memory, CPU, card, USB. Each is an icon with an optional value.
+    float rx = gfx.W - 14;
+    auto indicator = [&](const char* icon, const std::string& value, Color iconColor, Color textColor) {
+        if (!value.empty()) {
+            rx -= gfx.measure(Font::SmallBold, value);
+            gfx.text(Font::SmallBold, value, rx, cy - th / 2, textColor);
+            rx -= 4;
+        }
+        rx -= 20;
+        gfx.icon(icon, rx, cy - 10, 20, iconColor);
+        rx -= 14;
+    };
+    const Battery& b = sys.battery;
+    if (settings.barBattery && b.capacity >= 0) {
+        Color c = b.charging() ? theme::good : b.capacity <= 10 ? theme::bad : b.capacity <= 20 ? theme::warn : theme::text;
+        const char* icon = b.charging() ? "battery-charging" : b.capacity <= 10 ? "battery-warning" : b.capacity <= 35 ? "battery-low"
+                                     : b.capacity <= 70 ? "battery-medium" : "battery-full";
+        indicator(icon, strprintf("%d%%", b.capacity), c, c);
+    }
+    if (settings.barVolume && sys.hasVolume()) {
+        int v = sys.volume();
+        bool mute = (sys.hasMute() && sys.muted()) || v == 0;
+        const char* icon = mute ? "volume-x" : (sys.hasOutputSwitch() && !sys.speaker()) ? "headphones" : v < 50 ? "volume-1" : "volume-2";
+        Color c = mute ? theme::faint : theme::text;
+        indicator(icon, strprintf("%d%%", v), c, c);
+    }
+    if (settings.barMemory && sys.memTotal > 0) {
+        bool low = sys.memAvailable < sys.memTotal / 10;
+        indicator("memory-stick", compactBytes(sys.memAvailable), theme::dim, low ? theme::warn : theme::text);
+    }
+    if (settings.barCpu && sys.cpuPercent >= 0)
+        indicator("cpu", strprintf("%d%%", sys.cpuPercent), theme::dim, sys.cpuPercent >= 85 ? theme::warn : theme::text);
+    if (settings.barCard && sys.externalMounted) indicator("card", {}, theme::dim, theme::dim);
+    if (settings.barUsb && sys.usbConnected) indicator("usb", {}, theme::dim, theme::dim);
+
+    float x = 14;
     Settings::TimeMode mode = settings.time;
     double wall = wallSeconds();
     if (mode == Settings::TimeMode::Auto) mode = wallClockValid(wall) ? Settings::TimeMode::Clock : Settings::TimeMode::Uptime;
@@ -342,6 +417,8 @@ void App::drawTopBar() {
         time_t t = (time_t)wall;
         tm lt{};
         localtime_r(&t, &lt);
+        gfx.icon("clock", x, cy - 9, 18, theme::dim);
+        x += 22;
         x += gfx.text(Font::SmallBold, strprintf("%02d:%02d", lt.tm_hour, lt.tm_min), x, cy - th / 2, theme::text) + 12;
     } else if (mode == Settings::TimeMode::Uptime) {
         gfx.icon("timer", x, cy - 9, 18, theme::dim);
@@ -350,56 +427,7 @@ void App::drawTopBar() {
     }
     if (Screen* s = top()) {
         std::string title = s->title();
-        if (!title.empty()) gfx.text(Font::SmallBold, title, x, cy - th / 2, theme::dim, gfx.W / 2 - x);
-    }
-
-    float rx = gfx.W - 14;
-    const Battery& b = sys.battery;
-    if (b.capacity >= 0) {
-        Color c = b.charging() ? theme::good : b.capacity <= 10 ? theme::bad : b.capacity <= 20 ? theme::warn : theme::text;
-        std::string pct = strprintf("%d%%", b.capacity);
-        float w = gfx.measure(Font::SmallBold, pct);
-        rx -= w;
-        gfx.text(Font::SmallBold, pct, rx, cy - th / 2, c);
-        const char* icon = b.charging() ? "battery-charging" : b.capacity <= 10 ? "battery-warning" : b.capacity <= 35 ? "battery-low"
-                                     : b.capacity <= 70 ? "battery-medium" : "battery-full";
-        rx -= 24;
-        gfx.icon(icon, rx, cy - 10, 20, c);
-        rx -= 14;
-    }
-    if (sys.hasVolume()) {
-        int v = sys.volume();
-        bool mute = (sys.hasMute() && sys.muted()) || v == 0;
-        std::string pct = strprintf("%d%%", v);
-        float w = gfx.measure(Font::SmallBold, pct);
-        rx -= w;
-        gfx.text(Font::SmallBold, pct, rx, cy - th / 2, mute ? theme::faint : theme::text);
-        const char* icon = mute ? "volume-x" : (sys.hasOutputSwitch() && !sys.speaker()) ? "headphones" : v < 50 ? "volume-1" : "volume-2";
-        rx -= 24;
-        gfx.icon(icon, rx, cy - 10, 20, mute ? theme::faint : theme::text);
-        rx -= 14;
-    }
-    if (sys.usbConnected) {
-        rx -= 20;
-        gfx.icon("usb", rx, cy - 10, 20, theme::dim);
-        rx -= 10;
-    }
-    if (sys.externalMounted) {
-        rx -= 20;
-        gfx.icon("card", rx, cy - 10, 20, theme::dim);
-        rx -= 10;
-    }
-    if (settings.expert) {
-        long availKb = 0;
-        std::string meminfo = readFile("/proc/meminfo").value_or("");
-        size_t at = meminfo.find("MemAvailable:");
-        if (at != std::string::npos) availKb = atol(meminfo.c_str() + at + 13);
-        std::string load = readLine("/proc/loadavg");
-        load = load.substr(0, load.find(' '));
-        std::string s = strprintf("%s  %s free", load.c_str(), formatBytes((uint64_t)availKb * 1024).c_str());
-        float w = gfx.measure(Font::Small, s);
-        rx -= w;
-        gfx.text(Font::Small, s, rx, cy - gfx.lineHeight(Font::Small) / 2, theme::faint);
+        if (!title.empty() && rx - x > 40) gfx.text(Font::SmallBold, title, x, cy - th / 2, theme::dim, rx - x);
     }
 }
 
@@ -594,13 +622,24 @@ int App::run(int argcIn, char** argvIn) {
     catalog.load();
     stats.load(paths.data);
     sys.init();
+    batteryLog.load(paths.data + "/battery.tsv");
     art.start(paths.cache);
 
     auto homeScreen = std::make_unique<HomeScreen>();
     home = homeScreen.get();
     homeScreen->shown.set(1.f);
     stack_.push_back(std::move(homeScreen));
-    home->restore(readFile(paths.runtime + "/state").value_or(""));
+    std::string state = readFile(paths.runtime + "/state").value_or("");
+    home->restore(state);
+    for (const auto& line : split(state, '\n'))
+        if (line.rfind("files\t", 0) == 0) {
+            auto f = split(line, '\t');
+            if (f.size() >= 2 && isDir(f[1])) {
+                auto files = std::make_unique<FileScreen>(f[1], f.size() >= 3 ? f[2] : "");
+                files->shown.set(1.f);
+                stack_.push_back(std::move(files));
+            }
+        }
     reportLastSession();
     startupMs = (SDL_GetTicksNS() - t0) / 1e6;
     logf("ready in %.0f ms", startupMs);
@@ -635,6 +674,7 @@ int App::run(int argcIn, char** argvIn) {
         if (now >= nextPoll_) {
             nextPoll_ = now + kPollInterval;
             if (sys.poll()) dirty = true;
+            batteryLog.sample(sys.battery);
             checkBattery();
             if (settings.time != Settings::TimeMode::Off) dirty = true;
         }

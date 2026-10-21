@@ -5,13 +5,15 @@
 #include <set>
 #include <unordered_map>
 
+#include "battery.h"
 #include "details.h"
+#include "system.h"
 #include "util.h"
 #include "widgets.h"
 
 namespace {
 constexpr float kBottom = 36, kRowH = 40, kTabsY = 88, kListY = 128;
-const char* kTabNames[] = {"Overview", "Most played", "Categories", "Recent"};
+const char* kTabNames[] = {"Overview", "Most played", "Categories", "Recent", "Battery"};
 
 std::string titleOf(const std::string& id) {
     const Entry* e = app.catalog.find(id);
@@ -152,10 +154,12 @@ void StatsScreen::input(const KeyEvent& ev) {
             if (!ev.repeat) setTab(tab_ + 1);
             break;
         case Key::Up:
-            if (count) sel = ev.repeat ? std::max(0, sel - 1) : (sel - 1 + count) % count;
+            if (tab_ == kBattery) boot_ = std::min(boot_ + 1, std::max(0, (int)batteryLog.boots().size() - 1));
+            else if (count) sel = ev.repeat ? std::max(0, sel - 1) : (sel - 1 + count) % count;
             break;
         case Key::Down:
-            if (count) sel = ev.repeat ? std::min(count - 1, sel + 1) : (sel + 1) % count;
+            if (tab_ == kBattery) boot_ = std::max(0, boot_ - 1);
+            else if (count) sel = ev.repeat ? std::min(count - 1, sel + 1) : (sel + 1) % count;
             break;
         case Key::L2:
             if (count) sel = std::max(0, sel - 6);
@@ -179,6 +183,7 @@ std::vector<Hint> StatsScreen::hints() const {
         const std::string& id = rows()[selected_[tab_]].id;
         if (!id.empty() && app.catalog.find(id)) h.push_back({Key::Confirm, "Details"});
     }
+    if (tab_ == kBattery && batteryLog.boots().size() > 1) h.push_back({Key::Up, "Earlier boot"});
     h.push_back({Key::R1, "Tab"});
     h.push_back({Key::Back, "Back"});
     return h;
@@ -231,6 +236,75 @@ void StatsScreen::drawOverview(const SDL_FRect& area, float alpha) {
         gfx.text(Font::Small, r.sub, area.x + area.w - 12 - rw - 16, y + 9, fade(theme::dim, alpha), area.w * 0.3f,
                  Align::Right);
         y += 42;
+    }
+}
+
+void StatsScreen::drawBattery(const SDL_FRect& area, float alpha) {
+    const Battery& b = sys.battery;
+    const auto& boots = batteryLog.boots();
+    if (b.capacity < 0 && boots.empty()) {
+        float cy = area.y + area.h / 2 - 30;
+        gfx.icon("battery", gfx.W / 2 - 16, cy, 32, fade(theme::dim, alpha));
+        gfx.text(Font::Bold, "No battery", gfx.W / 2, cy + 44, fade(theme::text, alpha), 0, Align::Center);
+        return;
+    }
+
+    BatteryEstimate est = batteryLog.estimate(b);
+    std::string left = "-", leftLabel = "Time left";
+    if (b.status == "Charging") leftLabel = "Until full";
+    if (est.seconds >= 0) left = formatDuration(std::max(300.0, std::round(est.seconds / 300) * 300));
+    Tile tiles[3] = {{b.capacity >= 0 ? strprintf("%d%%", b.capacity) : "-", b.status.empty() ? "Battery" : b.status},
+                     {left, leftLabel},
+                     {est.ratePerHour != 0 ? strprintf("%+.1f%%", est.ratePerHour) : "-",
+                      est.fromHistory ? "Per hour, last hour" : "Per hour, current"}};
+    float gap = 10, tw = (area.w - 2 * gap) / 3, th = 62;
+    for (int i = 0; i < 3; ++i) {
+        SDL_FRect r{area.x + i * (tw + gap), area.y, tw, th};
+        gfx.round(r, 12, fade(theme::panel, 0.9f * alpha));
+        gfx.text(Font::Title, tiles[i].value, r.x + 12, r.y + 6, fade(theme::text, alpha), r.w - 20);
+        gfx.text(Font::Small, tiles[i].label, r.x + 12, r.y + 38, fade(theme::dim, alpha), r.w - 20);
+    }
+
+    SDL_FRect g{area.x, area.y + th + 12, area.w, area.h - th - 12};
+    gfx.round(g, 12, fade(theme::panel, 0.6f * alpha));
+    if (boots.empty()) return;
+    boot_ = std::clamp(boot_, 0, (int)boots.size() - 1);
+    const BatteryBoot& boot = boots[boots.size() - 1 - boot_];
+    const auto& v = boot.samples;
+    bool current = &boot == batteryLog.current();
+    std::string label = current ? "This boot" : strprintf("%d %s earlier", boot_, boot_ == 1 ? "boot" : "boots");
+    gfx.text(Font::SmallBold, label, g.x + 12, g.y + 8, fade(theme::text, alpha));
+
+    SDL_FRect plot{g.x + 40, g.y + 34, g.w - 56, g.h - 34 - 26};
+    for (int pct = 0; pct <= 100; pct += 25) {
+        float y = std::round(plot.y + plot.h * (1 - pct / 100.f));
+        gfx.fill({plot.x, y, plot.w, 1}, fade(theme::line, 0.7f * alpha));
+        gfx.text(Font::Tiny, std::to_string(pct), plot.x - 8, y - gfx.lineHeight(Font::Tiny) / 2, fade(theme::faint, alpha), 0,
+                 Align::Right);
+    }
+    if (v.empty()) return;
+    double t0 = v.front().uptime, t1 = std::max(v.back().uptime, t0 + 3600);
+    gfx.text(Font::Tiny, formatClock(t0), plot.x, plot.y + plot.h + 6, fade(theme::faint, alpha));
+    gfx.text(Font::Tiny, formatClock(t1), plot.x + plot.w, plot.y + plot.h + 6, fade(theme::faint, alpha), 0, Align::Right);
+    gfx.text(Font::Tiny, "uptime", plot.x + plot.w / 2, plot.y + plot.h + 6, fade(theme::faint, alpha), 0, Align::Center);
+
+    // One 2 px column per step; gaps of more than five minutes without samples stay empty.
+    const float step = 2;
+    size_t j = 0;
+    for (float x = 0; x < plot.w; x += step) {
+        double t = t0 + (t1 - t0) * (x + step / 2) / plot.w;
+        if (t > v.back().uptime) break;
+        while (j + 1 < v.size() && v[j + 1].uptime < t) ++j;
+        if (t < v[j].uptime) continue;
+        const BatterySample& a = v[j];
+        const BatterySample& n = j + 1 < v.size() ? v[j + 1] : v[j];
+        if (n.uptime - a.uptime > 300) continue;
+        double f = n.uptime > a.uptime ? (t - a.uptime) / (n.uptime - a.uptime) : 0;
+        float cap = (float)(a.capacity + (n.capacity - a.capacity) * f);
+        float y = plot.y + plot.h * (1 - std::clamp(cap, 0.f, 100.f) / 100);
+        Color c = a.status == 'C' || a.status == 'F' ? theme::good : accent();
+        gfx.fill({plot.x + x, y, step, plot.y + plot.h - y}, fade(c, 0.22f * alpha));
+        gfx.fill({plot.x + x, y - 1, step, 2}, fade(c, alpha));
     }
 }
 
@@ -293,6 +367,7 @@ void StatsScreen::draw() {
     SDL_FRect area{24 + dx + shift, kListY, gfx.W - 48, gfx.H - kListY - kBottom - 6};
     float a = t * tt;
     if (tab_ == kOverview) drawOverview(area, a);
+    else if (tab_ == kBattery) drawBattery(area, a);
     else drawList({area.x - 12, area.y, area.w + 24, area.h}, a);
 }
 

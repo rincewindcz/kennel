@@ -15,7 +15,7 @@ public:
     void resumed() override { compute(); }
 
 private:
-    enum Tab { kOverview, kMostPlayed, kCategories, kRecent, kTabCount };
+    enum Tab { kOverview, kMostPlayed, kCategories, kRecent, kBattery, kTabCount };
     struct Row {
         std::string id, title, right, sub;
         float bar = -1;
@@ -31,6 +31,7 @@ private:
     void drawOverview(const SDL_FRect& area, float alpha);
     void drawList(const SDL_FRect& area, float alpha);
     void drawEmpty(const SDL_FRect& area, float alpha);
+    void drawBattery(const SDL_FRect& area, float alpha);
     std::vector<Row>& rows() { return rows_[tab_]; }
     const std::vector<Row>& rows() const { return rows_[tab_]; }
 
@@ -46,4 +47,5 @@ private:
     std::string bootTime_;
     std::vector<Row> recentEntries_;
     std::string subtitle_;
+    int boot_ = 0;  // battery history: 0 is the newest boot
 };

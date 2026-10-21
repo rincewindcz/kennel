@@ -10,7 +10,7 @@
 
 #include "gfx.h"
 
-// Glyph atlas text engine for book text. Glyphs are rasterized on the CPU into 1024x1024 pages;
+// Glyph atlas text engine for book and terminal text. Glyphs are rasterized on the CPU into 1024x1024 pages;
 // dirty rows of a page are uploaded once per frame, before any text of that frame is drawn, so the
 // GPU never waits on a texture that queued draws still use. Text is drawn with one
 // SDL_RenderGeometry call per page.

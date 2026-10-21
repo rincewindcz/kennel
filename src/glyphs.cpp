@@ -12,16 +12,22 @@ namespace {
 
 const char* const kStyleNames[] = {"Regular", "Bold", "Italic", "BoldItalic"};
 
-// assets/fonts/read/<Family>-<Style>.ttf; missing styles fall back to Inter from the UI fonts,
-// with italics synthesized by SDL_ttf.
+// assets/fonts/read/<Family>-<Style>.ttf or assets/fonts/<Family>-<Style>.ttf; missing styles fall
+// back to the family's Regular or Bold, then to Inter, with italics and bold synthesized by SDL_ttf.
+TTF_Font* openFile(const std::string& family, const char* style, int size) {
+    for (const char* dir : {"fonts/read/", "fonts/"})
+        if (TTF_Font* f = TTF_OpenFont(paths.asset(dir + family + "-" + style + ".ttf").c_str(), (float)size)) return f;
+    return nullptr;
+}
+
 TTF_Font* openStyle(const std::string& family, int style, int size) {
-    std::string own = paths.asset("fonts/read/" + family + "-" + kStyleNames[style] + ".ttf");
-    if (TTF_Font* f = TTF_OpenFont(own.c_str(), (float)size)) return f;
+    if (TTF_Font* f = openFile(family, kStyleNames[style], size)) return f;
     bool bold = style & Glyphs::Bold, italic = style & Glyphs::Italic;
-    std::string base = paths.asset("fonts/read/" + family + "-" + (bold ? "Bold" : "Regular") + ".ttf");
-    TTF_Font* f = TTF_OpenFont(base.c_str(), (float)size);
+    TTF_Font* f = openFile(family, bold ? "Bold" : "Regular", size);
+    int synth = italic ? TTF_STYLE_ITALIC : 0;
+    if (!f && bold && (f = openFile(family, "Regular", size))) synth |= TTF_STYLE_BOLD;
     if (!f) f = TTF_OpenFont(paths.asset(std::string("fonts/Inter-") + (bold ? "Bold" : "Regular") + ".ttf").c_str(), (float)size);
-    if (f && italic) TTF_SetFontStyle(f, TTF_STYLE_ITALIC);
+    if (f && synth) TTF_SetFontStyle(f, synth);
     return f;
 }
 

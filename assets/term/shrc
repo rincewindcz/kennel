@@ -1,0 +1,3 @@
+# Read by interactive shells of kennel-term through ENV (unless ENV is already set): a prompt with
+# the working directory, since /etc/profile may set a bare one.
+PS1='\w \$ '

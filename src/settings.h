@@ -22,6 +22,7 @@ struct Settings {
     bool showFavorites = true;
     bool expert = false;
     bool perfOverlay = false;
+    bool barCpu = true, barMemory = true, barVolume = true, barBattery = true, barCard = true, barUsb = true;
     bool hudNextLaunch = false;
     std::vector<std::string> hidden;      // category names hidden on Home
     std::vector<std::string> order;       // category names in user order; others follow

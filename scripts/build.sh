@@ -53,7 +53,7 @@ build_armhf() {
         -DCMAKE_TOOLCHAIN_FILE="$repo/cmake/armhf-linux.cmake" -DKENNEL_STATIC_CXX=ON
     ninja -C "$repo/build/armhf"
     if [[ -d $glos_root ]]; then
-        for bin in kennel kennel-read; do
+        for bin in kennel kennel-read kennel-term; do
             check_symbols "$repo/build/armhf/$bin" "$glos_root"
         done
     else

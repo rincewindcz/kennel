@@ -71,15 +71,18 @@ Background: vertical gradient with an accent glow; with "Background: Game art", 
 
 ### 4.1 Top bar
 
+Each indicator is an icon with an optional value; left: time and screen title, right to left: battery, volume, free memory, CPU, TF card, USB. Settings > Top bar turns each one on or off.
+
 | Indicator | Source | Shown |
 |---|---|---|
 | Clock or uptime | `CLOCK_REALTIME` when after 2024-01-01, else `CLOCK_BOOTTIME`; setting Auto, Clock, Uptime, Off | always |
-| Screen title | top screen's `title()` | outside Home |
+| Screen title | top screen's `title()` | outside Home, when there is room |
 | Battery %, charging | first `/sys/class/power_supply/*` of type `Battery`: `capacity`, `status`; chargers of type `Mains`/`USB`: `online` | amber at 20 %, red at 10 % |
 | Volume, output | ALSA volume control, mute switch, speaker switch | headphone glyph when the speaker is off |
+| Free memory | `MemAvailable`, as `438M` or `1.2G` | amber under 10 % of `MemTotal` |
+| CPU | busy share of all cores from `/proc/stat` between two polls | amber from 85 % |
 | TF card | `external_mount` in `/proc/mounts` | when mounted |
 | USB | `/sys/class/udc/*/state` = `configured` | when connected to a PC |
-| Load, free RAM | `/proc/loadavg`, `MemAvailable` | expert mode |
 
 Values are polled every second; a redraw happens only when a shown value changes.
 
@@ -91,6 +94,8 @@ Left: hints of the top screen, with button glyphs from `SDL_GetGamepadButtonLabe
 |---|---|---|
 | Settings | settings page | no |
 | Expert | expert page (expert mode only) | no |
+| Terminal | kennel-term (expert mode only) | no |
+| Files | file browser in HOME | no |
 | Statistics | statistics page | no |
 | Screen off | backlight to 0; the next button press restores it and is swallowed | no |
 | Eject card | `eject` command (shown while mounted), then library reload | yes |
@@ -175,12 +180,13 @@ Tabs switched with L1/R1 (also left/right), changed with a 16 px slide and fade:
 | Most played | entries by total time (then sessions), rank, bar relative to the maximum, time and sessions |
 | Categories | play time per category with bars, sessions and entries played; sessions of entries no longer in the catalog under "Removed entries" |
 | Recent | up to 200 sessions, newest first: title, last played, length (or unknown), exit (killed, code) |
+| Battery | tiles: level and status, time left or until full, rate per hour (last hour or current); graph of the boot's samples, 0 to 100 %, x from the first sample over at least an hour of uptime, 2 px columns, green while charging; up/down: earlier boots |
 
 List tabs: up/down (wrapping on a fresh press), L2/R2 page, A opens Details of entries still in the catalog. The header shows the total time and session count.
 
 ## 8. Quick settings (START)
 
-Panel from the right over dimmed Home: brightness (5 to 100 %, sysfs, writable by group `video` on goodluckOS, persisted by `S90backlight`), volume, mute, output Speaker/Headphones, then Statistics, Settings, Expert, Screen off.
+Panel from the right over dimmed Home: battery (level, estimated time left or until full), brightness (backlight levels 1 to max, sysfs, writable by group `video` on goodluckOS, persisted by `S90backlight`), volume, mute, output Speaker/Headphones, then Files, Statistics, Settings, Expert and Terminal (expert mode), Screen off. The same side panel (`MenuPanel`) lists the file browser's actions.
 
 ## 9. Settings
 
@@ -191,7 +197,8 @@ Panel from the right over dimmed Home: brightness (5 to 100 %, sysfs, writable b
 | Accent colour | `accent` | Blue, Teal, Amber, Rose, Violet, Green (index) |
 | Background | `background` | `gradient`, `art` |
 | Animations | `animations` | `normal`, `fast` (half duration), `off` |
-| Top bar time | `time` | `auto`, `clock`, `uptime`, `off` |
+| Top bar: time | `time` | `auto`, `clock`, `uptime`, `off` |
+| Top bar: CPU load, free memory, volume, battery, external card, USB | `bar_cpu`, `bar_memory`, `bar_volume`, `bar_battery`, `bar_card`, `bar_usb` | 0, 1 (default 1) |
 | Sort games by | `sort` | `name`, `last_played`, `play_time` |
 | Continue row, Favorites row | `show_continue`, `show_favorites` | 0, 1 |
 | Categories | `hidden`, `order` | `;`-separated names |
@@ -205,11 +212,11 @@ Settings also offers Rescan library, About (version, platform, renderer, gamepad
 
 ## 10. Expert mode
 
-Menu: INSPECT (Status, Logs, Processes, Library, Sessions), TOOLS (Performance overlay, HUD for next launch), ACTIONS (Restart kennel, Switch to `previous_launcher`, Sync filesystems).
+Menu: INSPECT (Status, Logs, Processes, Library, Sessions), TOOLS (Terminal, Files from `/`, Performance overlay, HUD for next launch), ACTIONS (Restart kennel, Switch to `previous_launcher`, Sync filesystems).
 
 | Page | Content | Source |
 |---|---|---|
-| Status | text page reloaded every second, sections SYSTEM (hostname, kernel, uptime, load, CPUs and `scaling_cur_freq`, RAM, swap, zram), POWER (capacity, status, health, voltage, current, design capacity, time left while discharging, external power), STORAGE (each of `mounts`), DISPLAY (renderer, logical size, refresh, frame time), GPU (`devfreq` frequencies), USB (UDC states), INPUT (gamepad), KENNEL (version, platform, start-up, library, art textures, text cache), then one section per `[status]` command | `/proc`, `uname`, `statvfs`, `/sys/class/{power_supply,udc,devfreq}` |
+| Status | text page reloaded every second, sections SYSTEM (hostname, kernel, uptime, load, CPUs and `scaling_cur_freq`, RAM, swap, zram), POWER (capacity, status, health, voltage, current, design capacity, estimated time left or until full with rate and source, battery history size and path, external power), STORAGE (each of `mounts`), DISPLAY (renderer, logical size, refresh, frame time), GPU (`devfreq` frequencies), USB (UDC states), INPUT (gamepad), KENNEL (version, platform, start-up, library, art textures, text cache), then one section per `[status]` command | `/proc`, `uname`, `statvfs`, `/sys/class/{power_supply,udc,devfreq}` |
 | Logs | menu of `[logs]` entries and `glob=` matches (with sizes), kennel's own log, Kernel (`kernel_log` output, reloaded every 2 s); a log opens as the last 256 KiB of the file, reloaded every second, following the end | files |
 | Processes | PID, user, CPU % between samples, RSS, command line; sampled on open, after 0.5 s, then every 2 s; A on a row: Terminate (SIGTERM) or Kill (SIGKILL), result as a toast | `/proc/<pid>` |
 | Library | Report (sources with entry and archive counts, categories with counts and images, parser messages with file and line, entries without own art per category, absolute command paths that do not exist, load time) and Rescan library | catalog |
@@ -264,8 +271,9 @@ Tweens (`anim::Tween`) animate floats with `outCubic` or `inOutQuad`; durations 
 
 ```
 CMakeLists.txt, cmake/armhf-linux.cmake
-src/                       kennelcore (static library shared with kennel-read): anim, util, ini, paths,
-                           platform, settings, image, gfx, input, menu
+src/                       kennelcore (static library shared with kennel-read and kennel-term): anim, util,
+                           ini, paths, platform, settings, image, gfx, input, menu, glyphs, osk, zip,
+                           tokenizer, cover
   main.cpp                 entry point
   app.*                    screen stack, main loop, bars, dock, toasts, launch, system actions
   anim.h                   frame clock, tweens
@@ -278,13 +286,20 @@ src/                       kennelcore (static library shared with kennel-read): 
   image.*, art.*           decoding, scaling, QOI cache, worker, stock cards
   system.*, procs.*        battery, backlight, mixer, mounts, USB; /proc sampler
   menu.*                   menu widget, menu items, scrollbar, accent colour
-  widgets.*                menu page, dialog, background, page header
+  glyphs.*                 glyph atlas text engine (reader and terminal text)
+  osk.*                    on-screen keyboard
+  widgets.*                menu page, dialog, text input, background, page header
+  battery.*                battery history, estimate
+  files.*                  file browser, image viewer
   home.*, details.*, panels.*, menus.cpp, expert.*, statsview.cpp
   read/                    kennel-read: book model (book.*), format loaders (txt, epub, html, fb2, pdb),
-                           text layout, glyph atlas, reader screens
+                           text layout, reader screens
+  term/                    kennel-term: escape sequence parser and screen (vt.*), pseudo terminal (pty.*),
+                           suggestions (complete.*), terminal screen and modes (term.*)
 third_party/               stb_image.h, qoi.h
-assets/                    fonts (reading fonts in fonts/read), icons (svg sources, 20 and 32 px PNGs)
-platforms/                 goodluckos.ini, goodluckos/books.puppy (Books entry)
+assets/                    fonts (reading fonts in fonts/read), icons (svg sources, 20 and 32 px PNGs),
+                           term/shrc (kennel-term prompt)
+platforms/                 goodluckos.ini, goodluckos/{books,terminal}.puppy (Books and Terminal entries)
 tools/                     kennel-run, launcher-glos.sh, padinject.c (device test input)
 scripts/                   sysroot.sh, build.sh, icons.sh, testroot.sh, stage-glos.sh, deploy-glos.sh,
                            testbooks.sh, mkbooks.py (FB2, PalmDOC and MOBI test books)
@@ -341,3 +356,22 @@ Files: `~/.config/kennel/read.ini` (settings), `~/.local/share/kennel/read/posit
 `platforms/goodluckos/books.puppy` is installed to `~/.local/share/applications/`: an `[ARCHIVE]` named Books over `~/books` and `/media/external/books` with the extensions above, opening `ports/kennel/kennel-read %s`. kennel shows the books as the Books category (glyph `book-open`), records reading time like play time, and lists recently read books in Continue.
 
 Test books: `scripts/testbooks.sh` (Project Gutenberg EPUB, TXT and HTML, including a Czech book; FB2, PalmDOC PDB and MOBI generated by `scripts/mkbooks.py`).
+
+## 15. kennel-term
+
+Separate binary, like kennel-read: launched through `launch_command`, so on goodluckOS it runs as `player` in the app cgroup and kennel restarts when it exits. kennel launches it with the id `tool:terminal`, which kennel-run receives as an empty id: no play session.
+
+| Part | Implementation |
+|---|---|
+| Pseudo terminal | `posix_openpt`, child with `setsid`, `TIOCSCTTY`, `TERM=xterm-256color`, `COLORTERM=truecolor`, `ENV` (prompt), login shell or `sh -c COMMAND`; a reader thread buffers output and pushes one `SDL_EVENT_USER` per batch; `TIOCSWINSZ` on every layout change (keyboard shown or hidden, font size) |
+| Parser | state machine: ground with UTF-8 decoding, escape, charset designation, CSI with private markers and intermediates, OSC (title), DCS/SOS/PM/APC ignored; C0 controls also inside sequences; replies (DSR, DA) written back to the terminal |
+| Screen | main and alternate grids of cells (code point, fg, bg, attributes), scroll region, saved cursor per screen, pending wrap, insert mode, 2000 lines of scrollback from the main screen; on a smaller size the lines above the cursor move into the scrollback |
+| Drawing | background runs per row with `gfx.fill`, glyphs through the `Glyphs` atlas (JetBrains Mono, bold synthesized), cell width the advance of `M`, cell height the line skip; cursor as an accent block with the glyph in the background colour; redraw only on output or input |
+| Input | `Input::repeatAll` makes face buttons and triggers repeat while held (typing); the right stick is read directly for scrollback |
+| Suggestions | line typed at the prompt tracked by kennel-term while `tcgetpgrp` is the shell; history in `term_history` (500 unique lines, ranked use counts per first word), commands scanned from `PATH` once at start |
+
+Measured on the device: 13 px font, 8x18 px cells, 80x13 with the keyboard and 80x25 in keys mode.
+
+## 16. File browser
+
+`FileScreen` on kennel's screen stack. Listing with `opendir`/`stat` (links followed, flagged), sorted folders first. Opening goes through `Catalog::entriesForFile`, which reuses the `[ARCHIVE]` rules recorded while loading the catalog (extensions, expanded directories, command template); the launched entry has the id `rom:<path>`, so statistics of files outside the library directories are kept per path. Long operations (`cp -r`, `mv` across file systems, `rm -rf`) run on a thread with a modal panel; rename, same file system moves, single file deletes and `mkdir` are direct system calls. `App::saveState` appends `files<TAB>dir<TAB>name` for an open browser; start-up reopens it.

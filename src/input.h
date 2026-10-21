@@ -22,12 +22,15 @@ public:
     std::string label(Key k) const;
     std::string padName() const;
 
+    bool repeatAll = false;  // face buttons and triggers repeat too (typing)
+
 private:
     Key fromButton(int button) const;
     Key fromKeycode(SDL_Keycode k) const;
     void press(Key k, std::vector<KeyEvent>& out);
     void release(Key k);
     void stick(std::vector<KeyEvent>& out);
+    bool repeats(Key k) const;
 
     SDL_Gamepad* pad_ = nullptr;
     Key held_ = Key::None;

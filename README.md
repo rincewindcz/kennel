@@ -2,7 +2,7 @@
 
 Game and app launcher for Linux handhelds with a 640x480 screen and a gamepad. Written in C++20 on SDL3 and SDL3_ttf. First target: goodluckOS on the GA36-MB (R36S clone, Allwinner A23, Mali-400), where it replaces Puppy and reads the same `.puppy` files. Device integration lives in platform profiles (`platforms/*.ini`), so other systems need a profile, not code changes.
 
-The repository also builds `kennel-read`, a minimal e-book reader (section "kennel-read").
+The repository also builds `kennel-read`, a minimal e-book reader (section "kennel-read"), and `kennel-term`, a terminal with an on-screen keyboard and command suggestions (section "kennel-term").
 
 Design and implementation notes: [docs/DESIGN.md](docs/DESIGN.md).
 
@@ -13,12 +13,14 @@ Design and implementation notes: [docs/DESIGN.md](docs/DESIGN.md).
 | Home | one category at a time; carousel with a large focused card (300x200), neighbours scaled and dimmed; title, play time, last played and session count under the card; blurred game art as background |
 | Categories | Continue (recently played), Favorites, then the `.puppy` categories; hide and reorder in Settings |
 | Art | `ART`, per-ROM images in `ART_DIRECTORIES` and `ENTRY_ICONS_DIRECTORIES`, `ICON`; without an image a stock card (category image or colour, title); decoded on a worker thread, cached as QOI |
-| Top bar | clock (or uptime when the clock is not set), battery with charging state, volume and output, TF card, USB link; expert mode adds load and free RAM |
-| Bottom bar | button hints; dock (SELECT) with Settings, Expert, Statistics, Screen off, Eject card, Restart, Power off; destructive actions ask first |
-| Quick settings | START: brightness, volume, mute, speaker or headphones, shortcuts |
+| Top bar | icon and value for the clock (or uptime when the clock is not set), CPU load, free memory, volume and output, battery with charging state, TF card, USB link; Settings > Top bar selects the indicators |
+| Bottom bar | button hints; dock (SELECT) with Settings, Expert and Terminal (expert mode), Files, Statistics, Screen off, Eject card, Restart, Power off; destructive actions ask first |
+| Quick settings | START: battery level with estimated time left, brightness, volume, mute, speaker or headphones, shortcuts |
+| Files | file browser: open, copy, cut, paste, rename, delete, new folder, info, hidden files; files open with their library entry, an archive's command, the reader, the text viewer or the image viewer; expert mode: terminal in the folder, run scripts |
 | Details | X: statistics of the entry, Play, Favorite, Start at boot, last app log, reset statistics; expert: run in terminal, entry internals |
-| Statistics | per entry play time, sessions, last played, last exit code; statistics page with Overview, Most played, Categories and Recent tabs; error report when an app exits with a failure code |
-| Expert mode | Status (live), Logs (platform logs, port logs, kennel, kernel), Processes with terminate/kill, Library report and rescan, Sessions, performance overlay, HUD for the next launch, restart kennel, switch to the previous launcher, sync |
+| Statistics | per entry play time, sessions, last played, last exit code; statistics page with Overview, Most played, Categories, Recent and Battery tabs; error report when an app exits with a failure code |
+| Battery | level sampled every minute while kennel or a launched app runs; graph per boot, drain rate and time left |
+| Expert mode | Status (live), Logs (platform logs, port logs, kennel, kernel), Processes with terminate/kill, Library report and rescan, Sessions, Terminal, Files from `/`, performance overlay, HUD for the next launch, restart kennel, switch to the previous launcher, sync |
 | Animations | fade, slide and scale only; Normal, Fast or Off; no redraw while idle |
 
 ## Controls
@@ -42,12 +44,12 @@ Up/down switch categories on Home. Global hotkeys of the system (goodluckOS: STA
 Requirements: CMake, Ninja, clang and lld (cross build), Arch packages `sdl3`, `sdl3_ttf`, `alsa-lib`, `zlib` (host build). Icons are rasterized PNGs in `assets/icons/{20,32}`; `scripts/icons.sh` regenerates them from `assets/icons/svg` with `rsvg-convert`.
 
 ```sh
-scripts/build.sh host     # build/host/kennel, build/host/kennel-read
-scripts/build.sh armhf    # build/armhf/{kennel,kennel-read}, armv7-a hard float, static libstdc++
+scripts/build.sh host     # build/host/kennel, build/host/kennel-read, build/host/kennel-term
+scripts/build.sh armhf    # build/armhf/{kennel,kennel-read,kennel-term}, armv7-a hard float, static libstdc++
 scripts/build.sh all
 ```
 
-`armhf` first runs `scripts/sysroot.sh`, which assembles `build/sysroot-armhf` from Debian trixie armhf packages (glibc, libstdc++ 14, SDL3 3.2, SDL3_ttf 3.2, ALSA, zlib); the package index signature is checked with `debian-archive-keyring` when installed, packages by SHA256. `kennel` links only glibc, SDL3, SDL3_ttf and ALSA dynamically, `kennel-read` glibc, SDL3, SDL3_ttf and zlib. After the build, every undefined dynamic symbol of both binaries is checked against the libraries of the goodluckOS rootfs in `GLOS_ROOT` (default `/mnt/ext/r36s/goodluck/glos-root`); a missing symbol fails the build. CMake options: `KENNEL_ALSA` (default on), `KENNEL_STATIC_CXX` (default off, on for `armhf`).
+`armhf` first runs `scripts/sysroot.sh`, which assembles `build/sysroot-armhf` from Debian trixie armhf packages (glibc, libstdc++ 14, SDL3 3.2, SDL3_ttf 3.2, ALSA, zlib); the package index signature is checked with `debian-archive-keyring` when installed, packages by SHA256. `kennel` links only glibc, SDL3, SDL3_ttf and ALSA dynamically, `kennel-read` and `kennel-term` glibc, SDL3, SDL3_ttf and zlib. After the build, every undefined dynamic symbol of the three binaries is checked against the libraries of the goodluckOS rootfs in `GLOS_ROOT` (default `/mnt/ext/r36s/goodluck/glos-root`); a missing symbol fails the build. CMake options: `KENNEL_ALSA` (default on), `KENNEL_STATIC_CXX` (default off, on for `armhf`).
 
 ## Run on the host
 
@@ -75,7 +77,7 @@ scripts/build.sh armhf
 scripts/stage-glos.sh        # build/stage-glos, build/kennel-glos.zip
 ```
 
-Unzip `kennel-glos.zip` into the HOME root (MTP: `GA36MB -> HOME`). It contains `ports/kennel/` (`kennel`, `kennel-read`, `kennel-run`, assets, `platforms/goodluckos.ini`), the Books entry `.local/share/applications/books.puppy` and an empty `books/` folder. Make kennel the launcher in one of two ways:
+Unzip `kennel-glos.zip` into the HOME root (MTP: `GA36MB -> HOME`). It contains `ports/kennel/` (`kennel`, `kennel-read`, `kennel-term`, `kennel-run`, assets, `platforms/goodluckos.ini`), the Books and Terminal entries in `.local/share/applications/` (`books.puppy`, `terminal.puppy`) and an empty `books/` folder. Make kennel the launcher in one of two ways:
 
 - start it once (for example from a Puppy entry with `COMMAND=/home/player/ports/kennel/kennel`) and set Settings > Launcher at boot to kennel;
 - copy `tools/launcher-glos.sh` to `HOME/.local/launcher.sh`.
@@ -102,6 +104,7 @@ Host screenshots without a display: `KENNEL_AUTOMATE` runs comma-separated token
 | `up`, `down`, `left`, `right`, `a`, `b`, `x`, `y`, `l1`, `r1`, `l2`, `r2`, `start`, `select` | logical key press (`a` Confirm, `b` Back) |
 | `wait:MS` | pause |
 | `shot:PATH` | save the next frame as BMP |
+| `type:TEXT` | kennel-term only: TEXT as typed on the keyboard (no commas) |
 | `quit` | exit |
 
 ```sh
@@ -146,17 +149,51 @@ Other formats (PDF, AZW3, DOCX) are converted on a computer, for example with ca
 
 Settings: font family (Literata or Inter), size 14 to 36, line spacing 1.0 to 2.0, margins (narrow, normal, wide), alignment (left or justified), formatting (plain: one style; styled: bold headings, italic and bold text), paragraphs (first-line indent or spacing), theme (dark, sepia, light, custom), status bar (chapter and progress) on or off, brightness. The custom theme shows background and text colour rows with R, G and B sliders (0 to 255); the colours are stored as `custom_bg` and `custom_fg` (`#rrggbb`) in `read.ini` and can be edited there. Brightness sliders here and in kennel's quick settings step one backlight level at a time (the console has 10) and never go below level 1. The reading position is a byte offset into the book text, so it survives font and layout changes; progress is shown in percent.
 
+## kennel-term
+
+Terminal for the gamepad: the user's login shell (`sh -l` on goodluckOS) on a pseudo terminal with `TERM=xterm-256color`, drawn with JetBrains Mono through the reader's glyph atlas. Opened from the dock, quick settings and the Expert page (expert mode), from Files (Terminal here, Run), from the Terminal category (`terminal.puppy`), or directly: `kennel-term [--cwd DIR] [-e COMMAND]`. With `-e` the screen stays after the command ends until a button is pressed and the exit status is returned. The terminal is launched like an app (kennel restarts when it closes) and records no play session.
+
+The escape sequence parser covers what busybox tools and ncurses use with that terminfo entry: cursor movement, erase, insert and delete of characters and lines, scroll regions, SGR with 16, 256 and RGB colours, bold, dim, italic, underline, inverse, the alternate screen (1049), application cursor keys, DEC line drawing, device status and attribute reports, window titles. Not supported: double width characters, mouse reporting, reflow on resize. `top`, `less`, `vi` and `alsamixer` were checked. 2000 lines of scrollback.
+
+Two modes, switched with SELECT:
+
+| Mode | Screen | Buttons |
+|---|---|---|
+| Typing | terminal above the suggestion strip and the keyboard | d-pad moves on the keyboard, A presses the key, B backspace, X space, START enter, L2 shift (twice: caps lock), R2 symbols, L1/R1 choose a suggestion, Y inserts it |
+| Keys | full screen terminal, hint bar | d-pad arrows, A enter, B escape, X space, Y tab, L1/R1 page up/down, L2 Ctrl-C, R2 `q`, START menu |
+
+The keyboard has a row of terminal keys (Esc, Tab, Ctrl as a one-shot modifier, arrows, Home, End, PgUp, PgDn) and a gear key that opens the menu: font size (10 to 20), Ctrl-C, Ctrl-D, Ctrl-Z, Ctrl-L, Scroll back (d-pad and L1/R1 move through the scrollback), Clear scrollback, Controls, Close terminal. The right stick scrolls the scrollback in both modes. A USB keyboard types directly.
+
+Suggestions follow what was typed at the shell prompt since the last Enter (kennel-term tracks it; after arrows, Tab or Escape the shell's line is unknown and suggestions pause until Enter, and they are off while a program runs in the foreground). With nothing typed: the most recent commands. Otherwise: earlier commands that continue the line, then completions of the last word: commands from `PATH` and shell builtins for the first word (ranked by use in the history), files and folders of the shell's working directory (`/proc/PID/cwd`) after it, folders only after `cd`; `~/` is expanded and special characters are escaped. Accepted commands get a trailing space, folders a `/`.
+
+The shell gets `ENV=assets/term/shrc` unless `ENV` is set, which sets a prompt with the working directory (goodluckOS `/etc/profile` sets a bare `$ `).
+
+## File browser
+
+Files in the dock and quick settings starts in HOME (Expert > Files in `/`). Folders first, sorted by name; `..` goes up.
+
+| Button | Action |
+|---|---|
+| A | open the folder or file |
+| B | parent folder (closes at `/`) |
+| X | actions: Open, Copy, Cut, Paste or Move here, Rename, Delete, Info (path, link target, size, mode, owner), New folder, Show hidden files, Terminal here (expert) |
+| Y | HOME |
+| START | close |
+
+A file opens with its library entry (an archive file the catalog lists), else with the `[ARCHIVE]` whose `ENTRY_EXTENSIONS` contain its extension (archives whose `ENTRY_DIRECTORIES` hold the file first; with several, a dialog offers up to two plus View), books with kennel-read, images (`png`, `jpg`, `bmp`, `gif`, `qoi`) in the image viewer, text files (no NUL byte in the first 8 KiB) in the text viewer (first 512 KiB). In expert mode executable files and `.sh` scripts can be run in kennel-term. Copy, move across file systems and delete of folders run `cp -r`, `mv` and `rm -rf` on a worker thread; names that exist get a ` (2)` suffix. Rename and New folder use the on-screen keyboard (B delete, X space, Y clear, L1/R1 move the cursor, START done, SELECT cancel). A file browser that was open when an app started is reopened at the same folder and file when kennel returns.
+
 ## Files
 
 | Path | Content |
 |---|---|
 | `$XDG_CONFIG_HOME/kennel/kennel.ini` (default `~/.config/kennel`) | settings |
-| `$XDG_DATA_HOME/kennel/` (default `~/.local/share/kennel`) | `sessions.tsv`, `favorites`, `boot`, `journal` |
+| `$XDG_DATA_HOME/kennel/` (default `~/.local/share/kennel`) | `sessions.tsv`, `favorites`, `boot`, `journal`, `battery.tsv`, `term_history` |
 | `$XDG_CACHE_HOME/kennel/art/` (default `~/.cache/kennel`) | QOI thumbnails and backdrops, keyed by path, size and mtime |
-| `$XDG_RUNTIME_DIR/kennel/`, else `/dev/shm/kennel-UID`, else `/tmp/kennel-UID` | `state` (row and entry to restore), `kennel.log` |
+| `$XDG_RUNTIME_DIR/kennel/`, else `/dev/shm/kennel-UID`, else `/tmp/kennel-UID` | `state` (row and entry, open file browser), `kennel.log`, `kennel-read.log`, `kennel-term.log` |
 | `$XDG_CONFIG_HOME/kennel/read.ini` | kennel-read settings |
 | `$XDG_DATA_HOME/kennel/read/positions.tsv` | kennel-read reading positions, per book path |
-| next to the binary (symlinks in the CMake build directory), or `KENNEL_ASSETS` | `assets/` (fonts, reading fonts in `fonts/read`, icons), `platforms/`, `kennel-run` |
+| `$XDG_CONFIG_HOME/kennel/term.ini` | kennel-term settings (`font_size`) |
+| next to the binary (symlinks in the CMake build directory), or `KENNEL_ASSETS` | `assets/` (fonts, reading fonts in `fonts/read`, icons, `term/shrc`), `platforms/`, `kennel-run` |
 
 ## Library: .puppy files
 
@@ -181,7 +218,9 @@ Every launch runs the command through `kennel-run JOURNAL ID COMMAND`, which app
 | no end record, same boot (wrapper killed: `appctl kill-application`) | ends at kennel's start, marked killed |
 | no end record, earlier boot (power off in game) | counted, length unknown, not added to play time |
 
-`sessions.tsv` columns: sequence, boot index, start wall time, start uptime, duration, exit status, flags (`k` killed, `u` unknown length), entry id. Durations use `CLOCK_BOOTTIME`; "last played" uses the wall clock when it is set (year 2024 or later), otherwise uptime within the same boot or the number of boots since.
+`sessions.tsv` columns: sequence, boot index, start wall time, start uptime, duration, exit status, flags (`k` killed, `u` unknown length), entry id. Durations use `CLOCK_BOOTTIME`; "last played" uses the wall clock when it is set (year 2024 or later), otherwise uptime within the same boot or the number of boots since. An empty ID (tools such as kennel-term) records nothing.
+
+Battery history: kennel appends a sample to `battery.tsv` every minute and when the charging state changes; launches are prefixed with `KENNEL_BATTERY=<power_supply dir> KENNEL_BATTERY_LOG=<file>`, and `kennel-run` then appends a sample every minute while the app runs. Columns: boot id, uptime in seconds, capacity, first letter of the status (`C` charging, `D` discharging, `F` full, `N` not charging), voltage in mV. The file is cut to its last 512 KiB when it passes 1 MiB. The estimate is the least squares slope of the samples of the current charge or discharge within the last hour (at least 3 samples over 10 minutes), else the instantaneous current over the design capacity; rates under 0.5 % per hour count as unknown. The Battery tab of the statistics page shows the level, time left (or until full), the rate and a graph of the boot (up/down: earlier boots; gaps over 5 minutes stay empty).
 
 ## Platform profiles
 

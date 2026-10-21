@@ -1,8 +1,10 @@
 #!/bin/sh
 # kennel-run JOURNAL ID COMMAND
 # Runs COMMAND with /bin/sh and appends its start and end (exit status) to JOURNAL for kennel's
-# play statistics. The command runs as a child that this script waits for; SIGTERM to the whole
+# play statistics; an empty ID records nothing. The command runs as a child that this script waits for; SIGTERM to the whole
 # group (appctl stop-application) ends it and the wrapper still records the end.
+# With KENNEL_BATTERY (a power_supply directory) and KENNEL_BATTERY_LOG set, a battery sample is
+# appended to KENNEL_BATTERY_LOG every minute while COMMAND runs.
 journal=$1
 id=$2
 cmd=$3
@@ -10,7 +12,21 @@ cmd=$3
 read -r up _ </proc/uptime
 read -r boot </proc/sys/kernel/random/boot_id
 token=$$.$up
-printf 'S\t%s\t%s\t%s\t%s\t%s\n' "$token" "$boot" "$up" "$(date +%s)" "$id" >>"$journal"
+[ -n "$id" ] && printf 'S\t%s\t%s\t%s\t%s\t%s\n' "$token" "$boot" "$up" "$(date +%s)" "$id" >>"$journal"
+
+logger=
+if [ -n "${KENNEL_BATTERY:-}" ] && [ -n "${KENNEL_BATTERY_LOG:-}" ]; then
+    (
+        while sleep 60; do
+            read -r now _ </proc/uptime
+            read -r cap <"$KENNEL_BATTERY/capacity" || continue
+            read -r st <"$KENNEL_BATTERY/status"
+            read -r uv <"$KENNEL_BATTERY/voltage_now"
+            printf '%s\t%s\t%s\t%.1s\t%s\n' "$boot" "${now%.*}" "$cap" "${st:-?}" "$((${uv:-0} / 1000))" >>"$KENNEL_BATTERY_LOG"
+        done
+    ) </dev/null >/dev/null 2>&1 &
+    logger=$!
+fi
 
 # An asynchronous command gets /dev/null as stdin unless redirected: hand it the original one
 # through fd 3, so terminal apps keep the console.
@@ -26,7 +42,8 @@ while :; do
 done
 # Busybox ash: the read builtin spins while a caught signal is pending, so no traps and no read here.
 trap - TERM INT HUP
+[ -n "$logger" ] && kill "$logger" 2>/dev/null
 up=$(cat /proc/uptime)
 up=${up%% *}
-printf 'E\t%s\t%s\t%s\t%s\n' "$token" "$up" "$(date +%s)" "$rc" >>"$journal"
+[ -n "$id" ] && printf 'E\t%s\t%s\t%s\t%s\n' "$token" "$up" "$(date +%s)" "$rc" >>"$journal"
 exit "$rc"

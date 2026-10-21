@@ -16,10 +16,12 @@ constexpr int kStickPress = 16000, kStickRelease = 8000, kTriggerPress = 16000;
 // itself.
 double clockNow() { return SDL_GetTicksNS() / 1e9; }
 
-bool repeats(Key k) {
+}  // namespace
+
+bool Input::repeats(Key k) const {
+    if (repeatAll) return k != Key::Start && k != Key::Select && k != Key::None;
     return k == Key::Up || k == Key::Down || k == Key::Left || k == Key::Right || k == Key::L1 || k == Key::R1;
 }
-}  // namespace
 
 Key Input::fromButton(int b) const {
     bool swap = settings.swapConfirm;
@@ -128,9 +130,11 @@ void Input::handle(const SDL_Event& ev, std::vector<KeyEvent>& out) {
                 case SDL_GAMEPAD_AXIS_LEFTY: stickY_ = ev.gaxis.value; stick(out); break;
                 case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:
                 case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: {
-                    bool& state = ev.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER ? l2_ : r2_;
+                    bool left = ev.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER;
+                    bool& state = left ? l2_ : r2_;
                     bool now = ev.gaxis.value >= kTriggerPress;
-                    if (now && !state) press(ev.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER ? Key::L2 : Key::R2, out);
+                    if (now && !state) press(left ? Key::L2 : Key::R2, out);
+                    else if (!now && state) release(left ? Key::L2 : Key::R2);
                     state = now;
                     break;
                 }
