@@ -68,6 +68,8 @@ public:
     void runSystem(const std::string& command, const std::string& failure);
     void quit(int code);
     void switchToPrevious();
+    void restart();
+    void setWallpaper(const std::string& path);
     std::string wrapCommand(const Entry& e) const;
     void saveState();
 

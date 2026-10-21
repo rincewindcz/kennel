@@ -257,16 +257,6 @@ std::string sessionsReport() {
     return out;
 }
 
-void restartKennel() {
-    app.saveState();
-    art.stop();
-    sys.shutdown();
-    gfx.shutdown();
-    SDL_Quit();
-    execv(paths.exe.c_str(), app.argv);
-    _exit(127);
-}
-
 }  // namespace
 
 // ------------------------------------------------------------ text screen ---
@@ -570,7 +560,7 @@ void App::openExpert() {
                                       [](bool v) { settings.hudNextLaunch = v; }));
 
         m.push_back(items::header("ACTIONS"));
-        m.push_back(items::action("refresh-cw", "Restart kennel", restartKennel));
+        m.push_back(items::action("refresh-cw", "Restart kennel", [] { app.restart(); }));
         if (!platform.previousLauncher.empty()) {
             std::string prev = baseName(platform.previousLauncher);
             m.push_back(items::action("log-out", "Switch to " + prev, [prev] {

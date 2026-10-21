@@ -195,7 +195,7 @@ Panel from the right over dimmed Home: battery (level, estimated time left or un
 | Setting | Key | Values |
 |---|---|---|
 | Accent colour | `accent`, `accent_custom` | Blue, Teal, Amber, Rose, Violet, Green, Crimson, Custom (index); `#rrggbb` for Custom, edited with R, G and B sliders shown under the choice |
-| Background | `background` | `gradient`, `art` |
+| Background | `background`, `wallpaper` | `gradient`, `art`, `wallpaper`; image path for `wallpaper`, set from the file browser (image actions, image viewer X); decoded once, scaled to cover the screen and cached as `wallpaper.qoi`; drawn under a dark gradient (0.45 to 0.8 on Home, 0.7 to 0.9 on pages) |
 | Animations | `animations` | `normal`, `fast` (half duration), `off` |
 | Top bar: time | `time` | `auto`, `clock`, `uptime`, `off` |
 | Top bar: CPU load, free memory, volume, battery, external card, USB | `bar_cpu`, `bar_memory`, `bar_volume`, `bar_battery`, `bar_card`, `bar_usb` | 0, 1 (default 1) |
@@ -208,7 +208,7 @@ Panel from the right over dimmed Home: battery (level, estimated time left or un
 | Expert mode | `expert` | 0, 1 |
 | Performance overlay (Expert page) | `perf_overlay` | 0, 1 |
 
-Settings also offers Rescan library, About (version, platform, renderer, gamepad, start-up and library load times, paths, licenses) and, when the profile defines `launcher_script` and `previous_launcher`, Launcher at boot (rewrites the launcher script).
+Settings also offers Backup (section 17), Rescan library, About (version, platform, renderer, gamepad, start-up and library load times, paths, licenses) and, when the profile defines `launcher_script` and `previous_launcher`, Launcher at boot (rewrites the launcher script).
 
 ## 10. Expert mode
 
@@ -290,6 +290,7 @@ src/                       kennelcore (static library shared with kennel-read an
   osk.*                    on-screen keyboard
   widgets.*                menu page, dialog, text input, background, page header
   battery.*                battery history, estimate
+  backup.*                 backup and restore of settings and data
   files.*                  file browser, image viewer
   home.*, details.*, panels.*, menus.cpp, expert.*, statsview.cpp
   read/                    kennel-read: book model (book.*), format loaders (txt, epub, html, fb2, pdb),
@@ -375,3 +376,7 @@ Measured on the device: 13 px font, 8x18 px cells, 80x13 with the keyboard and 8
 ## 16. File browser
 
 `FileScreen` on kennel's screen stack. Listing with `opendir`/`stat` (links followed, flagged), sorted folders first. Opening goes through `Catalog::entriesForFile`, which reuses the `[ARCHIVE]` rules recorded while loading the catalog (extensions, expanded directories, command template); the launched entry has the id `rom:<path>`, so statistics of files outside the library directories are kept per path. Long operations (`cp -r`, `mv` across file systems, `rm -rf`) run on a thread with a modal panel; rename, same file system moves, single file deletes and `mkdir` are direct system calls. `App::saveState` appends `files<TAB>dir<TAB>name` for an open browser; start-up reopens it.
+
+## 17. Backup
+
+Settings > Backup. Location: `<external_mount>/kennel-backup` while the card is mounted (goodluckOS mounts it with `uid=1000`, writable by `player`), else `HOME/kennel-backup`. Back up now copies the config and data directories into `kennel-backup.tmp` with `cp -r`, writes `backup.ini` (version, wall time, boot id, uptime, session count), replaces `kennel-backup` with it and syncs. Restore (confirmation) replaces both directories with the backup's copies, syncs and restarts kennel (`App::restart`, `execv`). The art and wallpaper caches are rebuilt on demand and not backed up. "Last backup" shows the date when the clock was set at backup time and now, else the age within the same boot or "an earlier boot".

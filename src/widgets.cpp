@@ -3,6 +3,10 @@
 #include <algorithm>
 #include <cmath>
 
+#include <sys/stat.h>
+
+#include "image.h"
+#include "paths.h"
 #include "settings.h"
 #include "util.h"
 
@@ -25,7 +29,44 @@ size_t nextChar(const std::string& s, size_t i) {
 }  // namespace
 
 
-void drawBackground(float alpha) {
+SDL_Texture* wallpaper() {
+    static std::string loadedKey;
+    static SDL_Texture* tex = nullptr;
+    struct stat st;
+    std::string path = paths.expand(settings.wallpaper);
+    std::string key = settings.wallpaper.empty() || stat(path.c_str(), &st) != 0
+                          ? std::string()
+                          : strprintf("%s\t%lld\t%lld", path.c_str(), (long long)st.st_size, (long long)st.st_mtime);
+    if (key == loadedKey) return tex;
+    loadedKey = key;
+    if (tex) SDL_DestroyTexture(tex);
+    tex = nullptr;
+    if (key.empty()) return nullptr;
+    std::string qoi = paths.cache + "/wallpaper.qoi", keyFile = paths.cache + "/wallpaper.key";
+    Image img;
+    if (readFile(keyFile).value_or("") != key || !loadQoi(qoi, img)) {
+        Image src;
+        if (!loadImage(path, src)) {
+            logf("wallpaper %s: cannot decode", path.c_str());
+            return nullptr;
+        }
+        img = cover(src, (int)gfx.W, (int)gfx.H);
+        if (saveQoi(qoi, img)) writeFile(keyFile, key);
+    }
+    tex = gfx.texture(img);
+    return tex;
+}
+
+void drawBackground(float alpha, bool light) {
+    if (settings.background == Settings::Background::Wallpaper) {
+        if (SDL_Texture* w = wallpaper()) {
+            gfx.fill({0, 0, gfx.W, gfx.H}, fade(theme::bgBottom, alpha));
+            gfx.image(w, {0, 0, gfx.W, gfx.H}, alpha);
+            gfx.gradient({0, 0, gfx.W, gfx.H}, rgb(0x0a0c11, (light ? 0.45f : 0.7f) * alpha),
+                         rgb(0x0a0c11, (light ? 0.8f : 0.9f) * alpha));
+            return;
+        }
+    }
     gfx.gradient({0, 0, gfx.W, gfx.H}, fade(theme::bgTop, alpha), fade(theme::bgBottom, alpha));
     gfx.glow({-260, -300, 700, 560}, accent(0.16f * alpha));
 }

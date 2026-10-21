@@ -35,7 +35,8 @@ void Settings::load(const std::string& file) {
     };
     flag("swap_confirm", swapConfirm);
     time = pick(s->get("time"), {"auto", "clock", "uptime", "off"}, time);
-    background = pick(s->get("background"), {"gradient", "art"}, background);
+    background = pick(s->get("background"), {"gradient", "art", "wallpaper"}, background);
+    wallpaper = s->get("wallpaper");
     animations = pick(s->get("animations"), {"normal", "fast", "off"}, animations);
     sort = pick(s->get("sort"), {"name", "last_played", "play_time"}, sort);
     accent = std::clamp(atoi(s->get("accent", "0").c_str()), 0, kAccentCount);
@@ -66,13 +67,14 @@ bool Settings::save() const {
         return out;
     };
     const char* timeNames[] = {"auto", "clock", "uptime", "off"};
-    const char* bgNames[] = {"gradient", "art"};
+    const char* bgNames[] = {"gradient", "art", "wallpaper"};
     const char* animNames[] = {"normal", "fast", "off"};
     const char* sortNames[] = {"name", "last_played", "play_time"};
     std::string out = "[kennel]\n";
     out += strprintf("swap_confirm=%d\n", swapConfirm);
     out += strprintf("time=%s\n", timeNames[(int)time]);
     out += strprintf("background=%s\n", bgNames[(int)background]);
+    out += "wallpaper=" + wallpaper + "\n";
     out += strprintf("accent=%d\n", accent);
     out += strprintf("accent_custom=#%06x\n", customAccent & 0xffffff);
     out += strprintf("animations=%s\n", animNames[(int)animations]);

@@ -268,7 +268,7 @@ std::vector<Hint> HomeScreen::hints() const {
 }
 
 void HomeScreen::drawBackdrop() {
-    drawBackground();
+    drawBackground(1.f, true);
     if (settings.background != Settings::Background::Art || rows_.empty()) return;
 
     const Entry* e = selected();

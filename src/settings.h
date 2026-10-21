@@ -6,13 +6,14 @@
 
 struct Settings {
     enum class TimeMode { Auto, Clock, Uptime, Off };
-    enum class Background { Gradient, Art };
+    enum class Background { Gradient, Art, Wallpaper };
     enum class Animations { Normal, Fast, Off };
     enum class Sort { Name, LastPlayed, PlayTime };
 
     bool swapConfirm = false;
     TimeMode time = TimeMode::Auto;
     Background background = Background::Art;
+    std::string wallpaper;  // image for Background::Wallpaper
     int accent = 0;  // index into kAccents; kAccentCount is the custom colour
     uint32_t customAccent = 0x4f8cff;
     Animations animations = Animations::Normal;

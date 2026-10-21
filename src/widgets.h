@@ -66,5 +66,9 @@ private:
     Keyboard keyboard_;
 };
 
-void drawBackground(float alpha = 1.f);
+// Background of every page; with Background::Wallpaper the wallpaper under a dark gradient, lighter on
+// Home (`light`).
+void drawBackground(float alpha = 1.f, bool light = false);
+// The wallpaper scaled to the screen, decoded once and cached as QOI; null without a usable image.
+SDL_Texture* wallpaper();
 void drawPageHeader(const std::string& icon, const std::string& title, const std::string& subtitle, float alpha);

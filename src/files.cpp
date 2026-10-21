@@ -101,8 +101,12 @@ public:
     }
     void input(const KeyEvent& ev) override {
         if (ev.key == Key::Back || ev.key == Key::Confirm) close();
+        else if (ev.key == Key::X && tex_ && !ev.repeat) app.setWallpaper(path_);
     }
-    std::vector<Hint> hints() const override { return {{Key::Back, "Back"}}; }
+    std::vector<Hint> hints() const override {
+        if (!tex_) return {{Key::Back, "Back"}};
+        return {{Key::X, "Set as wallpaper"}, {Key::Back, "Back"}};
+    }
     std::string title() const override { return "Image"; }
     void draw() override {
         float t = shown.value;
@@ -269,6 +273,8 @@ void FileScreen::showActions() {
     if (it && !it->parent) {
         std::string path = pathOf(*it);
         m.push_back(items::action(it->dir ? "folder-open" : "play", "Open", [this] { activate(); }));
+        if (!it->dir && among(extensionOf(it->name), kImageExts))
+            m.push_back(items::action("image", "Set as wallpaper", [path] { app.setWallpaper(path); }));
         m.push_back(items::action("copy", "Copy", [path] {
             clipboard = {path, false};
             app.toast("Copied " + baseName(path), "copy");

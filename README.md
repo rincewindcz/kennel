@@ -13,7 +13,8 @@ Design and implementation notes: [docs/DESIGN.md](docs/DESIGN.md).
 | Home | one category at a time; carousel with a large focused card (300x200), neighbours scaled and dimmed; title, play time, last played and session count under the card; blurred game art as background |
 | Categories | Continue (recently played), Favorites, then the `.puppy` categories; hide and reorder in Settings |
 | Hidden entries | Details > Hide from Home; Settings > Hidden entries lists them by category and shows them again |
-| Appearance | accent colours Blue, Teal, Amber, Rose, Violet, Green, Crimson or a custom RGB colour; gradient or game art background; animation speed |
+| Appearance | accent colours Blue, Teal, Amber, Rose, Violet, Green, Crimson or a custom RGB colour; background gradient, game art of the selected entry, or a wallpaper (Files: X on an image or in the image viewer, Set as wallpaper); animation speed |
+| Backup | Settings > Backup copies settings and data to `kennel-backup` on the external card (HOME without a card) and restores them |
 | Art | `ART`, per-ROM images in `ART_DIRECTORIES` and `ENTRY_ICONS_DIRECTORIES`, `ICON`; without an image a stock card (category image or colour, title); decoded on a worker thread, cached as QOI |
 | Top bar | icon and value for the clock (or uptime when the clock is not set), CPU load, free memory, volume and output, battery with charging state, TF card, USB link; Settings > Top bar selects the indicators |
 | Bottom bar | button hints; dock (SELECT) with Settings, Expert and Terminal (expert mode), Files, Statistics, Screen off, Eject card, Restart, Power off; destructive actions ask first |
@@ -191,6 +192,8 @@ A file opens with its library entry (an archive file the catalog lists), else wi
 | `$XDG_CONFIG_HOME/kennel/kennel.ini` (default `~/.config/kennel`) | settings |
 | `$XDG_DATA_HOME/kennel/` (default `~/.local/share/kennel`) | `sessions.tsv`, `favorites`, `hidden` (entry ids hidden from Home), `boot`, `journal`, `battery.tsv`, `term_history` |
 | `$XDG_CACHE_HOME/kennel/art/` (default `~/.cache/kennel`) | QOI thumbnails and backdrops, keyed by path, size and mtime |
+| `$XDG_CACHE_HOME/kennel/wallpaper.qoi`, `wallpaper.key` | wallpaper scaled to the screen, keyed by path, size and mtime |
+| `kennel-backup/` on the external card, else in HOME | backup: `config/` and `data/` copies of the two directories above, `backup.ini` (version, time, boot, uptime, session count) |
 | `$XDG_RUNTIME_DIR/kennel/`, else `/dev/shm/kennel-UID`, else `/tmp/kennel-UID` | `state` (row and entry, open file browser), `kennel.log`, `kennel-read.log`, `kennel-term.log` |
 | `$XDG_CONFIG_HOME/kennel/read.ini` | kennel-read settings |
 | `$XDG_DATA_HOME/kennel/read/positions.tsv` | kennel-read reading positions, per book path |

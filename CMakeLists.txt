@@ -57,6 +57,7 @@ add_executable(kennel
     src/statsview.cpp
     src/battery.cpp
     src/files.cpp
+    src/backup.cpp
 )
 target_link_libraries(kennel PRIVATE kennelcore)
 

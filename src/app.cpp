@@ -131,6 +131,25 @@ void App::switchToPrevious() {
     _exit(127);
 }
 
+void App::restart() {
+    saveState();
+    art.stop();
+    sys.shutdown();
+    gfx.shutdown();
+    SDL_Quit();
+    execv(paths.exe.c_str(), argv);
+    _exit(127);
+}
+
+void App::setWallpaper(const std::string& path) {
+    settings.wallpaper = path;
+    settings.background = Settings::Background::Wallpaper;
+    if (!settings.save()) toast("Could not save settings", "triangle-alert", theme::bad);
+    else if (!wallpaper()) toast("Cannot open " + baseName(path), "triangle-alert", theme::bad);
+    else toast("Wallpaper set", "image", theme::good);
+    dirty = true;
+}
+
 void App::reloadCatalog() {
     // Home rows hold indices into the old catalog: drop them before rebuilding.
     std::string state = home ? home->stateString() : "";

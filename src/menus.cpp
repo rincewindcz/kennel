@@ -3,6 +3,7 @@
 #include <unistd.h>
 
 #include "art.h"
+#include "backup.h"
 #include "home.h"
 #include "paths.h"
 #include "platform.h"
@@ -121,6 +122,39 @@ void openHiddenEntries() {
     app.push(std::move(page));
 }
 
+void openBackup() {
+    auto page = std::make_unique<MenuScreen>("Backup", "hard-drive", [] {
+        std::vector<MenuItem> m;
+        std::string dir = backupDir();
+        m.push_back(items::info("folder", "Location", [dir] { return dir; }));
+        m.push_back(items::info("history", "Last backup", [dir] {
+            std::string d = describeBackup(dir);
+            return d.empty() ? std::string("none") : d;
+        }));
+        m.push_back(items::action("copy", "Back up now", [dir] {
+            std::string error;
+            if (makeBackup(dir, error)) {
+                app.toast("Backed up to " + dir, "check", theme::good);
+                if (auto* page = dynamic_cast<MenuScreen*>(app.top())) page->requestRebuild();
+            } else app.toast("Backup failed: " + error, "triangle-alert", theme::bad);
+        }));
+        if (!describeBackup(dir).empty())
+            m.push_back(items::action("undo-2", "Restore", [dir] {
+                app.confirm("undo-2", "Restore the backup?",
+                            "Settings, statistics, favourites, hidden entries, battery history and reading positions are "
+                            "replaced by the backup from " + describeBackup(dir) + ". kennel restarts.",
+                            "Restore", [dir] {
+                                std::string error;
+                                if (restoreBackup(dir, error)) app.restart();
+                                else app.toast("Restore failed: " + error, "triangle-alert", theme::bad);
+                            });
+            }, true));
+        return m;
+    });
+    page->subtitle = "Settings and data, without the art cache";
+    app.push(std::move(page));
+}
+
 }  // namespace
 
 void App::openSettings() {
@@ -158,11 +192,22 @@ void App::openSettings() {
                 m.push_back(std::move(s));
             }
         }
-        m.push_back(items::choice("layers", "Background", {"Gradient", "Game art"}, [] { return (int)settings.background; },
+        m.push_back(items::choice("layers", "Background", {"Gradient", "Game art", "Wallpaper"}, [] { return (int)settings.background; },
                                   [](int v) {
+                                      bool was = settings.background == Settings::Background::Wallpaper;
                                       settings.background = (Settings::Background)v;
                                       save();
+                                      if (was != (v == (int)Settings::Background::Wallpaper))
+                                          if (auto* page = dynamic_cast<MenuScreen*>(app.top())) page->requestRebuild();
                                   }));
+        if (settings.background == Settings::Background::Wallpaper) {
+            MenuItem image = items::info("", "Image", [] {
+                if (settings.wallpaper.empty()) return std::string("none, choose one in Files");
+                return wallpaper() ? baseName(settings.wallpaper) : "cannot open " + baseName(settings.wallpaper);
+            });
+            image.indent = true;
+            m.push_back(std::move(image));
+        }
         m.push_back(items::choice("zap", "Animations", {"Normal", "Fast", "Off"}, [] { return (int)settings.animations; },
                                   [](int v) {
                                       settings.animations = (Settings::Animations)v;
@@ -240,6 +285,7 @@ void App::openSettings() {
             settings.reportErrors = v;
             save();
         }));
+        m.push_back(items::link("hard-drive", "Backup", [] { openBackup(); }));
         m.push_back(items::toggle("terminal", "Expert mode", [] { return settings.expert; }, [](bool v) {
             settings.expert = v;
             save();
