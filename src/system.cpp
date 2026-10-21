@@ -155,6 +155,11 @@ void System::screenOff() {
 
 bool System::wake() {
     if (!screenIsOff()) return false;
+    long cur = 0;
+    if (readLong(platform.backlight + "/brightness", cur) && cur > 0) {  // turned on by someone else
+        savedBrightness_ = -1;
+        return false;
+    }
     writeFile(platform.backlight + "/brightness", std::to_string(savedBrightness_));
     savedBrightness_ = -1;
     return true;

@@ -40,7 +40,7 @@ HomeScreen::HomeScreen() {
 }
 
 const Entry* HomeScreen::entryAt(const Row& row, int i) const {
-    if (i < 0 || i >= (int)row.entries.size()) return nullptr;
+    if (i < 0 || i >= (int)row.entries.size() || row.entries[i] >= (int)app.catalog.entries.size()) return nullptr;
     return &app.catalog.entries[row.entries[i]];
 }
 

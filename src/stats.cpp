@@ -143,6 +143,7 @@ void Stats::ingest() {
 
 void Stats::rebuild() {
     stats_.clear();
+    newest_ = nullptr;
     for (const auto& s : sessions_) {
         EntryStats& e = stats_[s.id];
         ++e.launches;

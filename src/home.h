@@ -9,6 +9,7 @@ class HomeScreen : public Screen {
 public:
     HomeScreen();
     void rebuild();
+    void invalidate() { rows_.clear(); row_ = 0; }
     void restore(const std::string& state);
     std::string stateString() const;
     const Entry* selected() const;

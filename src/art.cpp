@@ -153,7 +153,7 @@ ArtCache::Card ArtCache::card(const Entry& e, const Category* c) {
             if (out.artAlpha >= 1.f) return out;
             anim::keepAlive();
         } else if (s.tex && s.icon) {
-            std::string skey = "s:" + e.id;
+            std::string skey = "si:" + e.id;
             Slot& st = slot(skey);
             if (!st.tex && composedThisFrame_ < kComposePerFrame) {
                 float iw, ih;
@@ -195,11 +195,18 @@ void ArtCache::pump() {
     {
         std::lock_guard lock(mutex_);
         // This frame's requests replace the queue: what scrolled away is no longer decoded.
+        // Queued jobs for slots drawn this frame stay; the rest scrolled away and are dropped.
+        std::deque<Job> keep;
         for (auto& q : queue_) {
-            inflight_.erase(q.key);
-            dropped.push_back(q.key);
+            auto it = slots_.find(q.key);
+            if (it != slots_.end() && it->second.used == gfx.frame) {
+                keep.push_back(std::move(q));
+            } else {
+                inflight_.erase(q.key);
+                dropped.push_back(q.key);
+            }
         }
-        queue_.clear();
+        queue_ = std::move(keep);
         for (auto& w : wants_) {
             if (inflight_.count(w.key)) continue;
             inflight_[w.key] = true;

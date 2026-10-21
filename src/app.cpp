@@ -147,17 +147,21 @@ void App::switchToPrevious() {
 }
 
 void App::reloadCatalog() {
+    // Home rows hold indices into the old catalog: drop them before rebuilding.
+    std::string state = home ? home->stateString() : "";
     catalog.load();
-    if (home) home->rebuild();
+    if (home) {
+        home->invalidate();
+        home->rebuild();
+        home->restore(state);
+    }
     dirty = true;
 }
 
 // --------------------------------------------------------------- launch ---
 
 std::string App::wrapCommand(const Entry& e) const {
-    std::string id = e.id;
-    std::replace(id.begin(), id.end(), '\t', ' ');
-    std::replace(id.begin(), id.end(), '\n', ' ');
+    const std::string& id = e.id;
     std::string cmd = e.command;
     if (settings.hudNextLaunch && !platform.hudEnv.empty()) cmd = "export " + platform.hudEnv + "; " + cmd;
     return shellQuote(paths.exeDir + "/kennel-run") + " " + shellQuote(stats.journal()) + " " + shellQuote(id) + " " +
@@ -189,6 +193,11 @@ void App::startLaunch() {
     if (platform.launch == Platform::Launch::Command) {
         std::string cmd = replaceAll(platform.launchCommand, "%c", shellQuote(launch_.command));
         cmd = replaceAll(cmd, "%t", launch_.terminal ? platform.terminalFlag : "");
+        if (launch_.command.size() >= 3900) {  // appctl rejects requests of 4000 characters and more
+            toast("Command too long to launch", "triangle-alert", theme::bad);
+            launch_.active = false;
+            return;
+        }
         if (!spawnDetached(cmd)) {
             toast("Could not start the launch command", "triangle-alert", theme::bad);
             launch_.active = false;
@@ -291,6 +300,11 @@ std::vector<App::DockItem> App::dockItems() const {
 
 void App::dockInput(const KeyEvent& ev) {
     auto items = dockItems();
+    if (items.empty()) {
+        dock_ = -1;
+        return;
+    }
+    dock_ = std::min(dock_, (int)items.size() - 1);
     switch (ev.key) {
         case Key::Left: dock_ = std::max(0, dock_ - 1); break;
         case Key::Right: dock_ = std::min((int)items.size() - 1, dock_ + 1); break;
@@ -611,7 +625,7 @@ int App::run(int argcIn, char** argvIn) {
     if (const char* script = getenv("KENNEL_AUTOMATE")) script_ = split(script, ',');
 
     std::vector<KeyEvent> keys;
-    bool needFrame = true;
+    bool needFrame = true, gamepadStarted = false;
     while (running_) {
         anim::tick();
         double now = anim::now();
@@ -650,7 +664,8 @@ int App::run(int argcIn, char** argvIn) {
             dirty = false;
             frame();
             needFrame = anim::alive() || !pending_.empty();
-            if (!SDL_WasInit(SDL_INIT_GAMEPAD)) {
+            if (!gamepadStarted) {
+                gamepadStarted = true;
                 logf("first frame at %.0f ms (draw %.0f ms: masks %.0f, icons %.0f, cards %.0f, text %.0f)",
                      (SDL_GetTicksNS() - t0) / 1e6, gfx.frameMs, gfx.maskMs, gfx.iconMs, art.composeMs, gfx.textMs);
                 if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) logf("gamepad init: %s", SDL_GetError());

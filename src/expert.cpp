@@ -379,7 +379,8 @@ void TextScreen::draw() {
         const std::string& l = lines_[top_ + i];
         size_t from = wrap_ ? 0 : advance(l, 0, hscroll_);
         if (from >= l.size()) continue;
-        gfx.text(Font::Mono, std::string_view(l).substr(from), a.x + 10, a.y + 4 + i * lh, fade(theme::text, 0.92f * t));
+        gfx.text(Font::Mono, std::string_view(l).substr(from), a.x + 10, a.y + 4 + i * lh, fade(theme::text, 0.92f * t),
+                 a.w - 20);
     }
     gfx.popClip();
     drawScrollbar({a.x + a.w - 6, a.y + 4, 3, a.h - 8}, (float)top_, (float)lines_.size(), (float)vis, t);

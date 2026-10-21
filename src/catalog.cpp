@@ -101,6 +101,15 @@ std::string cleanTitle(const std::string& stem, std::string* tags) {
     return title;
 }
 
+namespace {
+// Ids are stored in tab-separated statistics files.
+std::string makeId(std::string id) {
+    std::replace(id.begin(), id.end(), '\t', ' ');
+    std::replace(id.begin(), id.end(), '\n', ' ');
+    return id;
+}
+}  // namespace
+
 void Catalog::load() {
     uint64_t t0 = SDL_GetTicksNS();
     entries.clear();
@@ -209,7 +218,7 @@ void Catalog::load() {
             e.terminal = !s.get("TERMINAL").empty();
             e.art = paths.expand(s.get("ART"));
             if (e.art.empty()) e.art = paths.expand(s.get("ICON"));
-            e.id = "app:" + e.category + "/" + e.name;
+            e.id = makeId("app:" + e.category + "/" + e.name);
             e.source = rec.file;
             e.line = s.line;
             e.hidden = hidden;
@@ -273,7 +282,7 @@ void Catalog::load() {
                 e.art = lookupImage(art, e.name);
                 if (e.art.empty()) e.art = lookupImage(icons, e.name);
                 e.fallbackArt = defaultIcon;
-                e.id = "rom:" + e.path;
+                e.id = makeId("rom:" + e.path);
                 e.source = rec.file;
                 e.line = s.line;
                 e.color = cat.color;

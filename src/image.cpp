@@ -8,7 +8,6 @@
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
 #define STBI_ONLY_BMP
-#define STBI_NO_STDIO_FAILURE_STRINGS
 #include "stb_image.h"
 
 #define QOI_IMPLEMENTATION
@@ -17,8 +16,14 @@
 
 #include "util.h"
 
+namespace {
+constexpr long long kMaxPixels = 16'000'000;
+}
+
 bool loadImage(const std::string& path, Image& out) {
     int w, h, n;
+    // Decoding needs w * h * 4 bytes; the device has under 500 MB, so very large images are skipped.
+    if (!stbi_info(path.c_str(), &w, &h, &n) || (long long)w * h > kMaxPixels) return false;
     stbi_uc* data = stbi_load(path.c_str(), &w, &h, &n, 4);
     if (!data) return false;
     out.w = w;
@@ -53,19 +58,6 @@ bool saveQoi(const std::string& path, const Image& img) {
 
 namespace {
 
-// Premultiplied float copy, so averaging transparent pixels does not darken edges.
-std::vector<float> premultiply(const Image& img) {
-    std::vector<float> out((size_t)img.w * img.h * 4);
-    for (size_t i = 0; i < (size_t)img.w * img.h; ++i) {
-        float a = img.px[i * 4 + 3] / 255.f;
-        out[i * 4 + 0] = img.px[i * 4 + 0] * a;
-        out[i * 4 + 1] = img.px[i * 4 + 1] * a;
-        out[i * 4 + 2] = img.px[i * 4 + 2] * a;
-        out[i * 4 + 3] = a;
-    }
-    return out;
-}
-
 void storePixel(uint8_t* dst, const float* acc, float weight) {
     float a = acc[3] / weight;
     if (a <= 0.f) {
@@ -76,30 +68,36 @@ void storePixel(uint8_t* dst, const float* acc, float weight) {
     dst[3] = (uint8_t)std::clamp(std::lround(a * 255.f), 0L, 255L);
 }
 
-}  // namespace
+// Adds a source pixel premultiplied by its alpha, so averaging transparent pixels does not darken edges.
+inline void accumulate(float* acc, const uint8_t* p, float weight) {
+    float a = p[3] / 255.f * weight;
+    acc[0] += p[0] * a;
+    acc[1] += p[1] * a;
+    acc[2] += p[2] * a;
+    acc[3] += a;
+}
 
-Image resize(const Image& src, int w, int h) {
+// Resamples the region (rx, ry, rw, rh) of src to w x h: area average when shrinking, bilinear otherwise.
+Image resample(const Image& src, int rx, int ry, int rw, int rh, int w, int h) {
     Image out;
     out.w = w;
     out.h = h;
     out.px.resize((size_t)w * h * 4);
-    if (src.empty() || w <= 0 || h <= 0) return out;
-    std::vector<float> pm = premultiply(src);
-    float sx = (float)src.w / w, sy = (float)src.h / h;
+    if (src.empty() || rw <= 0 || rh <= 0 || w <= 0 || h <= 0) return out;
+    float sx = (float)rw / w, sy = (float)rh / h;
+    auto px = [&](int x, int y) { return &src.px[((size_t)(ry + y) * src.w + rx + x) * 4]; };
 
     if (sx >= 1.f && sy >= 1.f) {
-        // Area average over the source box of every destination pixel.
         for (int y = 0; y < h; ++y) {
             float y0 = y * sy, y1 = y0 + sy;
             for (int x = 0; x < w; ++x) {
                 float x0 = x * sx, x1 = x0 + sx;
                 float acc[4] = {0, 0, 0, 0}, wsum = 0;
-                for (int yy = (int)y0; yy < (int)std::ceil(y1) && yy < src.h; ++yy) {
+                for (int yy = (int)y0; yy < (int)std::ceil(y1) && yy < rh; ++yy) {
                     float wy = std::min(y1, yy + 1.f) - std::max(y0, (float)yy);
-                    for (int xx = (int)x0; xx < (int)std::ceil(x1) && xx < src.w; ++xx) {
+                    for (int xx = (int)x0; xx < (int)std::ceil(x1) && xx < rw; ++xx) {
                         float wgt = wy * (std::min(x1, xx + 1.f) - std::max(x0, (float)xx));
-                        const float* p = &pm[((size_t)yy * src.w + xx) * 4];
-                        for (int c = 0; c < 4; ++c) acc[c] += p[c] * wgt;
+                        accumulate(acc, px(xx, yy), wgt);
                         wsum += wgt;
                     }
                 }
@@ -109,40 +107,35 @@ Image resize(const Image& src, int w, int h) {
         return out;
     }
 
-    // Bilinear for upscaling (or mixed scaling).
     for (int y = 0; y < h; ++y) {
-        float fy = std::clamp((y + 0.5f) * sy - 0.5f, 0.f, (float)src.h - 1);
-        int y0 = (int)fy, y1 = std::min(y0 + 1, src.h - 1);
+        float fy = std::clamp((y + 0.5f) * sy - 0.5f, 0.f, (float)rh - 1);
+        int y0 = (int)fy, y1 = std::min(y0 + 1, rh - 1);
         float ty = fy - y0;
         for (int x = 0; x < w; ++x) {
-            float fx = std::clamp((x + 0.5f) * sx - 0.5f, 0.f, (float)src.w - 1);
-            int x0 = (int)fx, x1 = std::min(x0 + 1, src.w - 1);
+            float fx = std::clamp((x + 0.5f) * sx - 0.5f, 0.f, (float)rw - 1);
+            int x0 = (int)fx, x1 = std::min(x0 + 1, rw - 1);
             float tx = fx - x0;
-            float acc[4];
-            for (int c = 0; c < 4; ++c) {
-                float a = pm[((size_t)y0 * src.w + x0) * 4 + c], b = pm[((size_t)y0 * src.w + x1) * 4 + c];
-                float d = pm[((size_t)y1 * src.w + x0) * 4 + c], e = pm[((size_t)y1 * src.w + x1) * 4 + c];
-                acc[c] = (a + (b - a) * tx) * (1 - ty) + (d + (e - d) * tx) * ty;
-            }
+            float acc[4] = {0, 0, 0, 0};
+            accumulate(acc, px(x0, y0), (1 - tx) * (1 - ty));
+            accumulate(acc, px(x1, y0), tx * (1 - ty));
+            accumulate(acc, px(x0, y1), (1 - tx) * ty);
+            accumulate(acc, px(x1, y1), tx * ty);
             storePixel(&out.px[((size_t)y * w + x) * 4], acc, 1);
         }
     }
     return out;
 }
 
+}  // namespace
+
+Image resize(const Image& src, int w, int h) { return resample(src, 0, 0, src.w, src.h, w, h); }
+
 Image cover(const Image& src, int w, int h) {
     if (src.empty()) return {};
     float scale = std::max((float)w / src.w, (float)h / src.h);
     int cw = std::min(src.w, (int)std::lround(w / scale));
     int ch = std::min(src.h, (int)std::lround(h / scale));
-    int cx = (src.w - cw) / 2, cy = (src.h - ch) / 2;
-    Image crop;
-    crop.w = cw;
-    crop.h = ch;
-    crop.px.resize((size_t)cw * ch * 4);
-    for (int y = 0; y < ch; ++y)
-        memcpy(&crop.px[(size_t)y * cw * 4], &src.px[((size_t)(y + cy) * src.w + cx) * 4], (size_t)cw * 4);
-    return resize(crop, w, h);
+    return resample(src, (src.w - cw) / 2, (src.h - ch) / 2, cw, ch, w, h);
 }
 
 Image contain(const Image& src, int maxW, int maxH, float maxScale) {
