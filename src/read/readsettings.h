@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "gfx.h"
 
@@ -34,5 +35,6 @@ struct ReadSettings {
     std::string path;
 };
 
-extern const char* const kReadFamilies[];
-extern const int kReadFamilyCount;
+// Families with a Regular style in DATA/fonts (user fonts) or assets/fonts/read, sorted. A file name
+// without spaces is shown split into words: CharisSIL-Regular.ttf is Charis SIL.
+std::vector<std::string> readFamilies();

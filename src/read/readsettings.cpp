@@ -1,14 +1,39 @@
 #include "readsettings.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
+#include <cstring>
 
 #include "ini.h"
+#include "paths.h"
 #include "util.h"
 
-const char* const kReadFamilies[] = {"Alegreya", "Atkinson", "Bitter", "Charis SIL", "Crimson Pro", "EB Garamond",
-                                     "Inter", "Literata", "Lora", "Merriweather", "PT Serif", "Source Serif"};
-const int kReadFamilyCount = 12;
+std::vector<std::string> readFamilies() {
+    std::vector<std::string> out;
+    for (const std::string& dir : {paths.data + "/fonts", paths.asset("fonts/read")})
+        for (const auto& file : glob(dir + "/*-Regular.ttf")) {
+            std::string stem = baseName(file);
+            stem.resize(stem.size() - strlen("-Regular.ttf"));
+            if (stem.find(' ') != std::string::npos) {
+                out.push_back(stem);
+                continue;
+            }
+            std::string name;
+            for (size_t i = 0; i < stem.size(); ++i) {
+                bool upper = isupper((unsigned char)stem[i]);
+                bool prevLower = i > 0 && islower((unsigned char)stem[i - 1]);
+                bool acronymEnd = i > 0 && isupper((unsigned char)stem[i - 1]) && i + 1 < stem.size() &&
+                                  islower((unsigned char)stem[i + 1]);
+                if (upper && (prevLower || acronymEnd)) name += ' ';
+                name += stem[i];
+            }
+            out.push_back(name);
+        }
+    std::sort(out.begin(), out.end(), [](const std::string& a, const std::string& b) { return lower(a) < lower(b); });
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
+}
 
 template <typename E>
 static E pick(const std::string& v, std::initializer_list<const char*> names, E fallback) {

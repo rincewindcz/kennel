@@ -77,10 +77,10 @@ CMake symlinks `assets/`, `platforms/` and `tools/kennel-run` into the build dir
 
 ```sh
 scripts/build.sh armhf
-scripts/stage-glos.sh        # build/stage-glos, build/kennel-glos.zip
+scripts/stage-glos.sh        # build/stage-glos, build/kennel-glos.zip, build/kennel-fonts.zip
 ```
 
-Unzip `kennel-glos.zip` into the HOME root (MTP: `GA36MB -> HOME`). It contains `ports/kennel/` (`kennel`, `kennel-read`, `kennel-term`, `kennel-run`, assets, `platforms/goodluckos.ini`), the Books, Terminal and kennel entries in `.local/share/applications/` (`books.puppy`, `terminal.puppy`, `kennel.puppy`) and an empty `books/` folder. Make kennel the launcher in one of two ways:
+Unzip `kennel-glos.zip` into the HOME root (MTP: `GA36MB -> HOME`). It contains `ports/kennel/` (`kennel`, `kennel-read`, `kennel-term`, `kennel-run`, assets, `platforms/goodluckos.ini`), the Books, Terminal and kennel entries in `.local/share/applications/` (`books.puppy`, `terminal.puppy`, `kennel.puppy`) and an empty `books/` folder. `kennel-fonts.zip` is optional and is unzipped the same way: the reading fonts beyond Literata, Inter and Atkinson (Alegreya, Bitter, Charis SIL, Crimson Pro, EB Garamond, Lora, Merriweather, PT Serif, Source Serif) in `ports/kennel/assets/fonts/read/`. Make kennel the launcher in one of two ways:
 
 - start it once from Puppy (System > kennel, from `kennel.puppy`) and set Settings > Launcher at boot to kennel;
 - copy `tools/launcher-glos.sh` to `HOME/.local/launcher.sh`.
@@ -92,6 +92,7 @@ Over the USB serial console (root, `glos.py` from the goodluck tree):
 ```sh
 scripts/deploy-glos.sh               # changed files only (md5 compared on the device), creates HOME/books
 scripts/deploy-glos.sh --launcher    # also installs tools/launcher-glos.sh as .local/launcher.sh
+scripts/deploy-glos.sh --fonts       # also copies the optional reading fonts
 ```
 
 Changed files are pushed into `HOME/ports/.kennel-incoming` and then renamed into place on the same file system: writing over the running binary fails with `ETXTBSY`, a rename does not. The running kennel keeps the old binary until it restarts. Environment: `GLOS_PY` (required, path of `glos.py`), `GLOS_PORT` (default `/dev/ttyACM0`). The console transfers about 0.75 MB/s.
@@ -150,7 +151,9 @@ Other formats (PDF, AZW3, DOCX) are converted on a computer, for example with ca
 | START | settings panel |
 | B | save the position and exit |
 
-Settings: font family (Alegreya, Atkinson, Bitter, Charis SIL, Crimson Pro, EB Garamond, Inter, Literata, Lora, Merriweather, PT Serif, Source Serif), size 14 to 36, line spacing 1.0 to 2.0, margins (narrow, normal, wide), alignment (left or justified), formatting (plain: one style; styled: bold headings, italic and bold text), paragraphs (first-line indent or spacing), theme (dark, sepia, light, custom), status bar on or off with each item on or off (chapter, pages, progress in percent, reading time, battery), brightness. The custom theme shows background and text colour rows with R, G and B sliders (0 to 255); the colours are stored as `custom_bg` and `custom_fg` (`#rrggbb`) in `read.ini` and can be edited there. Brightness sliders here and in kennel's quick settings step one backlight level at a time (the console has 10) and never go below level 1. The reading position is a byte offset into the book text, so it survives font and layout changes; progress is shown in percent. Pages are screens as turned with Left/Right (one line of overlap); the page count appears once the whole book is laid out in the background and is recounted after font or layout changes. Reading time is the active time per book: the gap between two button presses counts up to 3 minutes, and the total is stored with the position.
+Settings: font family (every family found, see below), size 14 to 36, line spacing 1.0 to 2.0, margins (narrow, normal, wide), alignment (left or justified), formatting (plain: one style; styled: bold headings, italic and bold text), paragraphs (first-line indent or spacing), theme (dark, sepia, light, custom), status bar on or off with each item on or off (chapter, pages, progress in percent, reading time, battery), brightness. The custom theme shows background and text colour rows with R, G and B sliders (0 to 255); the colours are stored as `custom_bg` and `custom_fg` (`#rrggbb`) in `read.ini` and can be edited there. Brightness sliders here and in kennel's quick settings step one backlight level at a time (the console has 10) and never go below level 1. The reading position is a byte offset into the book text, so it survives font and layout changes; progress is shown in percent. Pages are screens as turned with Left/Right (one line of overlap); the page count appears once the whole book is laid out in the background and is recounted after font or layout changes. Reading time is the active time per book: the gap between two button presses counts up to 3 minutes, and the total is stored with the position.
+
+Reading fonts: Literata (default), Inter and Atkinson are bundled; `kennel-fonts.zip` adds Alegreya, Bitter, Charis SIL, Crimson Pro, EB Garamond, Lora, Merriweather, PT Serif, Source Serif. User fonts go to `$XDG_DATA_HOME/kennel/fonts/` (`~/.local/share/kennel/fonts/`) as `<Family>-Regular.ttf`, optionally with `-Bold`, `-Italic` and `-BoldItalic`; missing styles are synthesized. Every family with a Regular file is listed, sorted by name; a file name without spaces is shown split into words (`CharisSIL` as Charis SIL). A user font replaces a bundled family of the same name.
 
 ## kennel-term
 
@@ -197,6 +200,7 @@ A file opens with its library entry (an archive file the catalog lists), else wi
 | `$XDG_RUNTIME_DIR/kennel/`, else `/dev/shm/kennel-UID`, else `/tmp/kennel-UID` | `state` (row and entry, open file browser), `kennel.log`, `kennel-read.log`, `kennel-term.log` |
 | `$XDG_CONFIG_HOME/kennel/read.ini` | kennel-read settings |
 | `$XDG_DATA_HOME/kennel/read/positions.tsv` | kennel-read reading positions and reading time, per book path |
+| `$XDG_DATA_HOME/kennel/fonts/` | kennel-read user fonts, `<Family>-<Style>.ttf` |
 | `$XDG_CONFIG_HOME/kennel/term.ini` | kennel-term settings (`font_size`) |
 | next to the binary (symlinks in the CMake build directory), or `KENNEL_ASSETS` | `assets/` (fonts, reading fonts in `fonts/read`, icons, `term/shrc`), `platforms/`, `kennel-run` |
 

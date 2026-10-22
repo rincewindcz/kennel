@@ -27,7 +27,7 @@ Non-goals: scraping (the device has no network), video previews, touch input.
 | Shapes | 9-grid textures with analytic anti-aliased masks (rounded rects, rings, soft shadows; shadow blur rounded to 4 px steps so few masks exist), vertex-colour gradients, background glow from one 64x64 radial texture | no extra library, sharp at any size; a large shadow mask cost about 40 ms to build on the device |
 | Audio mixer | libasound simple mixer (optional, `KENNEL_ALSA`) | volume, mute, speaker switch |
 | Icons | Lucide (ISC) SVGs rasterized to white PNGs at 20 and 32 px by `scripts/icons.sh`, tinted at draw time | no SVG code on the device |
-| Fonts | Inter Regular, SemiBold, Bold; JetBrains Mono for logs; platform fallback fonts for CJK; kennel-read: 12 families in Regular, Italic, Bold, BoldItalic (`assets/fonts/read`) | the device has no monospace font; reading fonts are static styles; all but Literata and Inter are built by `scripts/fonts.sh` from google/fonts (variable fonts instanced, subset to Latin, Greek, Cyrillic and punctuation, layout tables dropped) |
+| Fonts | Inter Regular, SemiBold, Bold; JetBrains Mono for logs; platform fallback fonts for CJK; kennel-read: Literata, Inter, Atkinson in Regular, Italic, Bold, BoldItalic (`assets/fonts/read`), nine more in the optional `kennel-fonts.zip`, user fonts in `DATA/fonts` | the device has no monospace font; reading fonts are static styles, subset to Latin, Greek, Cyrillic and punctuation with layout tables dropped by `scripts/fonts.sh` (from google/fonts, variable fonts instanced; Literata and Inter subset in place); the core set keeps the package small |
 | Books | zlib for EPUB (zip, deflate); own tolerant markup tokenizer for XHTML, OPF, NCX, FB2 and MOBI HTML | zlib is on the device; no XML library needed for broken markup |
 | Config, data | INI (`kennel.ini`), TSV (`sessions.tsv`), plain lists (`favorites`) | readable and editable over MTP |
 
@@ -302,7 +302,7 @@ assets/                    fonts (reading fonts in fonts/read), icons (svg sourc
                            term/shrc (kennel-term prompt)
 platforms/                 goodluckos.ini, goodluckos/{books,terminal}.puppy (Books and Terminal entries)
 tools/                     kennel-run, launcher-glos.sh, padinject.c (device test input)
-scripts/                   sysroot.sh, build.sh, icons.sh, testroot.sh, stage-glos.sh, deploy-glos.sh,
+scripts/                   sysroot.sh, build.sh, icons.sh, fonts.sh, testroot.sh, stage-glos.sh, deploy-glos.sh,
                            testbooks.sh, mkbooks.py (FB2, PalmDOC and MOBI test books)
 ```
 
@@ -339,7 +339,7 @@ Text is laid out in lines on a uniform grid (line height times line spacing), so
 
 | Setting | Values |
 |---|---|
-| Font | Alegreya, Atkinson, Bitter, Charis SIL, Crimson Pro, EB Garamond, Inter, Literata, Lora, Merriweather, PT Serif, Source Serif |
+| Font | families found in `DATA/fonts` and `assets/fonts/read`: Literata, Inter, Atkinson; with `kennel-fonts.zip` also Alegreya, Bitter, Charis SIL, Crimson Pro, EB Garamond, Lora, Merriweather, PT Serif, Source Serif |
 | Size | 14 to 36 |
 | Line spacing | 1.0 to 2.0 |
 | Margins | narrow, normal, wide |

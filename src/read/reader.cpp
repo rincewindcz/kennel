@@ -165,7 +165,7 @@ void Reader::openSettings() {
     menu_.compact = true;
     menu_.rowHeight = 36;
     auto& m = menu_.items;
-    std::vector<std::string> families(kReadFamilies, kReadFamilies + kReadFamilyCount);
+    std::vector<std::string> families = readFamilies();
     m.push_back(items::choice("type", "Font", families,
                               [this, families] {
                                   auto it = std::find(families.begin(), families.end(), rs_.family);
