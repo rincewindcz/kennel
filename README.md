@@ -19,7 +19,9 @@ keep working.
 - **Expert mode**: live system status, logs, processes, library diagnostics, sessions, a
   performance overlay.
 - **kennel-read**: a small e-book reader for EPUB, FB2, MOBI/PDB, HTML and plain text. Scrolls by
-  lines, one font, no images, remembers the position.
+  lines, no images, remembers the position and the reading time. A status bar with chapter, pages,
+  progress, reading time and battery. Three reading fonts built in, nine more in an optional pack,
+  and your own fonts in `~/.local/share/kennel/fonts`.
 - **kennel-term**: a terminal for the gamepad. On-screen keyboard, suggestions from your history,
   PATH and the current folder, and a keys mode for `top`, `less`, `vi` or `alsamixer`.
 
@@ -29,7 +31,8 @@ while idle.
 ## Install on goodluckOS
 
 1. Download `kennel-glos.zip` from the releases and unzip it into the HOME root of the console
-   (over USB: `GA36MB -> HOME`).
+   (over USB: `GA36MB -> HOME`). Optionally unzip `kennel-fonts.zip` the same way for nine more
+   reading fonts.
 2. In Puppy, start kennel from the System category.
 3. In kennel: Settings > Launcher at boot > kennel.
 
@@ -59,7 +62,7 @@ Requirements: CMake, Ninja, SDL3, SDL3_ttf, ALSA, zlib; for the console also cla
 ```sh
 scripts/build.sh host     # run on a PC
 scripts/build.sh armhf    # cross build for the console (downloads a Debian armhf sysroot)
-scripts/stage-glos.sh     # build/kennel-glos.zip
+scripts/stage-glos.sh     # build/kennel-glos.zip, build/kennel-fonts.zip
 ```
 
 Running on a PC, testing and the full reference: [docs/REFERENCE.md](docs/REFERENCE.md).
@@ -72,5 +75,6 @@ Device integration (launch command, power actions, backlight, mixer, library sou
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Bundled fonts (Inter, Literata, JetBrains Mono) are under the SIL Open
-Font License, Lucide icons under ISC, stb_image and QOI under MIT/public domain.
+MIT, see [LICENSE](LICENSE). Bundled fonts (Inter, JetBrains Mono and the reading fonts in
+`assets/fonts/read`, including the optional pack) are under the SIL Open Font License, Lucide icons
+under ISC, stb_image and QOI under MIT/public domain.
