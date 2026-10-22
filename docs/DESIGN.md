@@ -27,7 +27,7 @@ Non-goals: scraping (the device has no network), video previews, touch input.
 | Shapes | 9-grid textures with analytic anti-aliased masks (rounded rects, rings, soft shadows; shadow blur rounded to 4 px steps so few masks exist), vertex-colour gradients, background glow from one 64x64 radial texture | no extra library, sharp at any size; a large shadow mask cost about 40 ms to build on the device |
 | Audio mixer | libasound simple mixer (optional, `KENNEL_ALSA`) | volume, mute, speaker switch |
 | Icons | Lucide (ISC) SVGs rasterized to white PNGs at 20 and 32 px by `scripts/icons.sh`, tinted at draw time | no SVG code on the device |
-| Fonts | Inter Regular, SemiBold, Bold; JetBrains Mono for logs; platform fallback fonts for CJK; kennel-read: Literata and Inter in Regular, Italic, Bold, BoldItalic (`assets/fonts/read`) | the device has no monospace font; Literata is a reading serif with static styles |
+| Fonts | Inter Regular, SemiBold, Bold; JetBrains Mono for logs; platform fallback fonts for CJK; kennel-read: 12 families in Regular, Italic, Bold, BoldItalic (`assets/fonts/read`) | the device has no monospace font; reading fonts are static styles; all but Literata and Inter are built by `scripts/fonts.sh` from google/fonts (variable fonts instanced, subset to Latin, Greek, Cyrillic and punctuation, layout tables dropped) |
 | Books | zlib for EPUB (zip, deflate); own tolerant markup tokenizer for XHTML, OPF, NCX, FB2 and MOBI HTML | zlib is on the device; no XML library needed for broken markup |
 | Config, data | INI (`kennel.ini`), TSV (`sessions.tsv`), plain lists (`favorites`) | readable and editable over MTP |
 
@@ -335,11 +335,11 @@ E-book reader built from the same repository (`kennel-read`), sharing kennelcore
 
 ### 14.2 Reading
 
-Text is laid out in lines on a uniform grid (line height times line spacing), so scrolling moves by whole lines: Up/Down one line with the shared key repeat (350 ms delay, 60 ms, 30 ms after 2 s), Left/Right and L1/R1 one screen, L2/R2 to the previous or next chapter, SELECT the chapter list, START the settings panel, B saves and exits. Nothing animates. A thin status bar shows the chapter and the progress in percent.
+Text is laid out in lines on a uniform grid (line height times line spacing), so scrolling moves by whole lines: Up/Down one line with the shared key repeat (350 ms delay, 60 ms, 30 ms after 2 s), Left/Right and L1/R1 one screen, L2/R2 to the previous or next chapter, SELECT the chapter list, START the settings panel, B saves and exits. Nothing animates. A thin status bar shows the chapter, the page and page count, the progress in percent, the reading time and the battery, each switchable. The page count needs the whole book laid out: the main loop lays out paragraphs in 20 ms slices while idle (`Layout::buildAll`) and shows the count once done. Reading time adds the gap between button presses, capped at 3 minutes; the status bar refreshes every 30 s for it and the battery.
 
 | Setting | Values |
 |---|---|
-| Font | Literata, Inter |
+| Font | Alegreya, Atkinson, Bitter, Charis SIL, Crimson Pro, EB Garamond, Inter, Literata, Lora, Merriweather, PT Serif, Source Serif |
 | Size | 14 to 36 |
 | Line spacing | 1.0 to 2.0 |
 | Margins | narrow, normal, wide |
@@ -347,10 +347,10 @@ Text is laid out in lines on a uniform grid (line height times line spacing), so
 | Formatting | plain (one style), styled (bold headings, italic and bold runs) |
 | Paragraphs | first-line indent, spacing (blank line) |
 | Theme | dark, sepia, light |
-| Status bar | on, off |
+| Status bar | on, off; chapter, pages, progress, reading time, battery each on or off |
 | Brightness | platform backlight |
 
-Files: `~/.config/kennel/read.ini` (settings), `~/.local/share/kennel/read/positions.tsv` (position per book path).
+Files: `~/.config/kennel/read.ini` (settings), `~/.local/share/kennel/read/positions.tsv` (path, offset, size, wall time, reading seconds per book).
 
 ### 14.3 goodluckOS
 

@@ -209,7 +209,7 @@ void Menu::draw(const SDL_FRect& area, float alpha) {
         }
         Font lf = compact ? Font::Small : Font::Body;
         float labelMax = area.w * 0.55f;
-        gfx.text(lf, m.label, x, mid - gfx.lineHeight(lf) / 2, fade(fg, alpha), labelMax);
+        float labelEnd = x + gfx.text(lf, m.label, x, mid - gfx.lineHeight(lf) / 2, fade(fg, alpha), labelMax);
 
         float right = area.x + area.w - 24;
         switch (m.type) {
@@ -224,7 +224,8 @@ void Menu::draw(const SDL_FRect& area, float alpha) {
                 std::string v = m.choices.empty() ? "" : m.choices[std::clamp(m.getIndex(), 0, (int)m.choices.size() - 1)];
                 Color c = fade(sel ? theme::text : theme::dim, alpha);
                 gfx.icon("chevron-right", right - 18, mid - 10, 20, fade(c, sel ? 1 : 0.5f));
-                float w = gfx.text(Font::Body, v, right - 22, mid - gfx.lineHeight(Font::Body) / 2, c, area.w * 0.35f, Align::Right);
+                float valueMax = std::max(area.w * 0.35f, right - 44 - labelEnd - 16);
+                float w = gfx.text(Font::Body, v, right - 22, mid - gfx.lineHeight(Font::Body) / 2, c, valueMax, Align::Right);
                 gfx.icon("chevron-left", right - 22 - w - 22, mid - 10, 20, fade(c, sel ? 1 : 0.5f));
                 break;
             }

@@ -11,7 +11,7 @@ std::string file() { return paths.data + "/read/positions.tsv"; }
 
 }  // namespace
 
-uint64_t loadPosition(const std::string& book) {
+ReadPosition loadPosition(const std::string& book) {
     std::string text = readFile(file()).value_or("");
     size_t pos = 0;
     while (pos < text.size()) {
@@ -19,13 +19,17 @@ uint64_t loadPosition(const std::string& book) {
         if (end == std::string::npos) end = text.size();
         std::string line = text.substr(pos, end - pos);
         pos = end + 1;
-        size_t tab = line.find('\t');
-        if (tab != std::string::npos && line.substr(0, tab) == book) return strtoull(line.c_str() + tab + 1, nullptr, 10);
+        auto fields = split(line, '\t');
+        if (fields.size() < 2 || fields[0] != book) continue;
+        ReadPosition p;
+        p.offset = strtoull(fields[1].c_str(), nullptr, 10);
+        if (fields.size() > 4) p.seconds = strtod(fields[4].c_str(), nullptr);
+        return p;
     }
-    return 0;
+    return {};
 }
 
-void savePosition(const std::string& book, uint64_t offset, uint64_t size) {
+void savePosition(const std::string& book, const ReadPosition& position, uint64_t size) {
     makeDirs(paths.data + "/read");
     std::string text = readFile(file()).value_or("");
     std::string out;
@@ -39,6 +43,7 @@ void savePosition(const std::string& book, uint64_t offset, uint64_t size) {
         if (line.empty() || (tab != std::string::npos && line.substr(0, tab) == book)) continue;
         out += line + "\n";
     }
-    out += strprintf("%s\t%llu\t%llu\t%.0f\n", book.c_str(), (unsigned long long)offset, (unsigned long long)size, wallSeconds());
+    out += strprintf("%s\t%llu\t%llu\t%.0f\t%.0f\n", book.c_str(), (unsigned long long)position.offset, (unsigned long long)size,
+                     wallSeconds(), position.seconds);
     writeFileAtomic(file(), out);
 }

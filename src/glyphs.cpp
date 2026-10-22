@@ -12,11 +12,14 @@ namespace {
 
 const char* const kStyleNames[] = {"Regular", "Bold", "Italic", "BoldItalic"};
 
-// assets/fonts/read/<Family>-<Style>.ttf or assets/fonts/<Family>-<Style>.ttf; missing styles fall
-// back to the family's Regular or Bold, then to Inter, with italics and bold synthesized by SDL_ttf.
+// assets/fonts/read/<Family>-<Style>.ttf or assets/fonts/<Family>-<Style>.ttf, spaces removed from the
+// family; missing styles fall back to the family's Regular or Bold, then to Inter, with italics and bold
+// synthesized by SDL_ttf.
 TTF_Font* openFile(const std::string& family, const char* style, int size) {
+    std::string stem = family;
+    stem.erase(std::remove(stem.begin(), stem.end(), ' '), stem.end());
     for (const char* dir : {"fonts/read/", "fonts/"})
-        if (TTF_Font* f = TTF_OpenFont(paths.asset(dir + family + "-" + style + ".ttf").c_str(), (float)size)) return f;
+        if (TTF_Font* f = TTF_OpenFont(paths.asset(dir + stem + "-" + style + ".ttf").c_str(), (float)size)) return f;
     return nullptr;
 }
 

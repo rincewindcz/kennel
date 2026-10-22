@@ -1,5 +1,7 @@
 #include "layout.h"
 
+#include <SDL3/SDL_timer.h>
+
 #include <algorithm>
 #include <cmath>
 
@@ -31,6 +33,8 @@ void Layout::reset(const Book* book, Glyphs* glyphs, const ReadSettings* setting
     lines_.assign(book->paragraphs.size(), {});
     built_.assign(book->paragraphs.size(), 0);
     styledParagraph_ = -1;
+    scanned_ = 0;
+    firstLine_.clear();
 }
 
 void Layout::styles(int paragraph) {
@@ -248,4 +252,17 @@ LinePos Layout::find(uint64_t offset) {
     }
     if (local == 0) pos.line = 0;
     return pos;
+}
+
+bool Layout::buildAll(double budget) {
+    if (complete()) return true;
+    int n = (int)book_->paragraphs.size();
+    uint64_t end = SDL_GetTicksNS() + (uint64_t)(budget * 1e9);
+    while (scanned_ < n) {
+        lines(scanned_++);
+        if (scanned_ % 32 == 0 && SDL_GetTicksNS() >= end) return false;
+    }
+    firstLine_.assign(n + 1, 0);
+    for (int i = 0; i < n; ++i) firstLine_[i + 1] = firstLine_[i] + (int)lines_[i].size();
+    return true;
 }

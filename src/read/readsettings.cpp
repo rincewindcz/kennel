@@ -6,8 +6,9 @@
 #include "ini.h"
 #include "util.h"
 
-const char* const kReadFamilies[] = {"Literata", "Inter"};
-const int kReadFamilyCount = 2;
+const char* const kReadFamilies[] = {"Alegreya", "Atkinson", "Bitter", "Charis SIL", "Crimson Pro", "EB Garamond",
+                                     "Inter", "Literata", "Lora", "Merriweather", "PT Serif", "Source Serif"};
+const int kReadFamilyCount = 12;
 
 template <typename E>
 static E pick(const std::string& v, std::initializer_list<const char*> names, E fallback) {
@@ -35,7 +36,15 @@ void ReadSettings::load(const std::string& file) {
     theme = pick(s->get("theme"), {"dark", "sepia", "light", "custom"}, theme);
     parseColor(s->get("custom_bg"), customBg);
     parseColor(s->get("custom_fg"), customFg);
-    if (const IniEntry* e = s->find("status_bar")) statusBar = e->value != "0";
+    auto flag = [s](const char* key, bool& v) {
+        if (const IniEntry* e = s->find(key)) v = e->value != "0";
+    };
+    flag("status_bar", statusBar);
+    flag("status_chapter", showChapter);
+    flag("status_pages", showPages);
+    flag("status_progress", showProgress);
+    flag("status_time", showTime);
+    flag("status_battery", showBattery);
 }
 
 bool ReadSettings::save() const {
@@ -49,6 +58,8 @@ bool ReadSettings::save() const {
     out += strprintf("size=%d\nspacing=%d\n", size, spacing);
     out += strprintf("margins=%s\nalign=%s\nformat=%s\n", m[(int)margins], a[(int)align], f[(int)format]);
     out += strprintf("paragraphs=%s\ntheme=%s\nstatus_bar=%d\n", p[(int)paragraphs], t[(int)theme], statusBar);
+    out += strprintf("status_chapter=%d\nstatus_pages=%d\nstatus_progress=%d\nstatus_time=%d\nstatus_battery=%d\n", showChapter,
+                     showPages, showProgress, showTime, showBattery);
     out += strprintf("custom_bg=#%06x\ncustom_fg=#%06x\n", customBg & 0xffffff, customFg & 0xffffff);
     return writeFileAtomic(path, out);
 }

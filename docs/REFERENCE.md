@@ -150,7 +150,7 @@ Other formats (PDF, AZW3, DOCX) are converted on a computer, for example with ca
 | START | settings panel |
 | B | save the position and exit |
 
-Settings: font family (Literata or Inter), size 14 to 36, line spacing 1.0 to 2.0, margins (narrow, normal, wide), alignment (left or justified), formatting (plain: one style; styled: bold headings, italic and bold text), paragraphs (first-line indent or spacing), theme (dark, sepia, light, custom), status bar (chapter and progress) on or off, brightness. The custom theme shows background and text colour rows with R, G and B sliders (0 to 255); the colours are stored as `custom_bg` and `custom_fg` (`#rrggbb`) in `read.ini` and can be edited there. Brightness sliders here and in kennel's quick settings step one backlight level at a time (the console has 10) and never go below level 1. The reading position is a byte offset into the book text, so it survives font and layout changes; progress is shown in percent.
+Settings: font family (Alegreya, Atkinson, Bitter, Charis SIL, Crimson Pro, EB Garamond, Inter, Literata, Lora, Merriweather, PT Serif, Source Serif), size 14 to 36, line spacing 1.0 to 2.0, margins (narrow, normal, wide), alignment (left or justified), formatting (plain: one style; styled: bold headings, italic and bold text), paragraphs (first-line indent or spacing), theme (dark, sepia, light, custom), status bar on or off with each item on or off (chapter, pages, progress in percent, reading time, battery), brightness. The custom theme shows background and text colour rows with R, G and B sliders (0 to 255); the colours are stored as `custom_bg` and `custom_fg` (`#rrggbb`) in `read.ini` and can be edited there. Brightness sliders here and in kennel's quick settings step one backlight level at a time (the console has 10) and never go below level 1. The reading position is a byte offset into the book text, so it survives font and layout changes; progress is shown in percent. Pages are screens as turned with Left/Right (one line of overlap); the page count appears once the whole book is laid out in the background and is recounted after font or layout changes. Reading time is the active time per book: the gap between two button presses counts up to 3 minutes, and the total is stored with the position.
 
 ## kennel-term
 
@@ -196,7 +196,7 @@ A file opens with its library entry (an archive file the catalog lists), else wi
 | `kennel-backup/` on the external card, else in HOME | backup: `config/` and `data/` copies of the two directories above, `backup.ini` (version, time, boot, uptime, session count) |
 | `$XDG_RUNTIME_DIR/kennel/`, else `/dev/shm/kennel-UID`, else `/tmp/kennel-UID` | `state` (row and entry, open file browser), `kennel.log`, `kennel-read.log`, `kennel-term.log` |
 | `$XDG_CONFIG_HOME/kennel/read.ini` | kennel-read settings |
-| `$XDG_DATA_HOME/kennel/read/positions.tsv` | kennel-read reading positions, per book path |
+| `$XDG_DATA_HOME/kennel/read/positions.tsv` | kennel-read reading positions and reading time, per book path |
 | `$XDG_CONFIG_HOME/kennel/term.ini` | kennel-term settings (`font_size`) |
 | next to the binary (symlinks in the CMake build directory), or `KENNEL_ASSETS` | `assets/` (fonts, reading fonts in `fonts/read`, icons, `term/shrc`), `platforms/`, `kennel-run` |
 
@@ -261,7 +261,7 @@ Battery history: kennel appends a sample to `battery.tsv` every minute and when 
 
 | Component | License |
 |---|---|
-| Inter, JetBrains Mono (`assets/fonts`), Literata (`assets/fonts/read`) | SIL Open Font License 1.1 |
+| Inter, JetBrains Mono (`assets/fonts`), reading fonts (`assets/fonts/read`, one `*-OFL.txt` or `*-LICENSE.txt` per family) | SIL Open Font License 1.1 |
 | Lucide icons (`assets/icons`) | ISC |
 | stb_image (`third_party/stb_image.h`) | public domain / MIT |
 | QOI (`third_party/qoi.h`) | MIT |

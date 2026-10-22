@@ -42,6 +42,10 @@ private:
     void automate(std::vector<KeyEvent>& keys);
     int brightness() const;
     void setBrightness(int level);
+    void readBattery();
+    double readingTime() const;
+    bool countingPages() const;
+    bool refreshing() const;
 
     Mode mode_ = Mode::Reading;
     Book book_;
@@ -58,6 +62,12 @@ private:
     double scrolledAt_ = 0;
     long maxBrightness_ = 0;
     bool rebuildSettings_ = false;
+    double readTime_ = 0;  // seconds, up to activeAt_
+    double activeAt_ = 0;
+    std::string batteryDir_;
+    int battery_ = -1;
+    bool charging_ = false;
+    double refreshAt_ = 0;
 
     std::vector<std::string> script_;
     double scriptAt_ = 0;

@@ -21,6 +21,7 @@ struct ReadSettings {
     Paragraphs paragraphs = Paragraphs::Indent;
     Theme theme = Theme::Dark;
     bool statusBar = true;
+    bool showChapter = true, showPages = true, showProgress = true, showTime = true, showBattery = true;
     uint32_t customBg = 0x1e1e1e, customFg = 0xd4d4d4;
 
     void load(const std::string& path);

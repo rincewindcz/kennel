@@ -32,6 +32,13 @@ public:
     uint64_t offset(const LinePos& p);
     LinePos find(uint64_t offset);
 
+    // Lays out the remaining paragraphs for at most budget seconds; true once the whole book is laid
+    // out, after which lineIndex() and lineCount() are valid.
+    bool buildAll(double budget);
+    bool complete() const { return !firstLine_.empty(); }
+    int lineIndex(const LinePos& p) const { return firstLine_[p.paragraph] + p.line; }
+    int lineCount() const { return firstLine_.back(); }
+
 private:
     void build(int paragraph, std::vector<Line>& out);
     void styles(int paragraph);
@@ -46,6 +53,8 @@ private:
     std::vector<uint8_t> built_;
     std::vector<uint8_t> style_;  // per byte of the paragraph being built or drawn
     int styledParagraph_ = -1;
+    int scanned_ = 0;
+    std::vector<int> firstLine_;  // index of each paragraph's first line, then the line count
 };
 
 uint32_t decodeUtf8(const std::string& s, uint32_t& i);

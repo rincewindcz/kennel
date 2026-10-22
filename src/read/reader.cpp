@@ -18,6 +18,9 @@ constexpr float kStatusH = 22;
 constexpr float kTopPad = 12;
 constexpr double kSaveDelay = 2.0;
 constexpr float kPanelW = 320;
+constexpr double kIdleCap = 180;      // longest gap between key presses counted as reading
+constexpr double kRefresh = 30;       // status bar refresh for the reading time and battery
+constexpr double kBuildSlice = 0.02;  // page count layout per main loop pass
 }  // namespace
 
 // ------------------------------------------------------------------ setup ---
@@ -102,8 +105,18 @@ void Reader::chapterStep(int dir) {
 
 void Reader::savePos() {
     if (book_.paragraphs.empty()) return;
-    savePosition(bookPath_, layout_.offset(top_), book_.size);
+    savePosition(bookPath_, {layout_.offset(top_), readingTime()}, book_.size);
     posDirty_ = false;
+}
+
+double Reader::readingTime() const { return readTime_ + std::min(anim::now() - activeAt_, kIdleCap); }
+
+bool Reader::countingPages() const {
+    return mode_ != Mode::Error && rs_.statusBar && rs_.showPages && !layout_.complete();
+}
+
+bool Reader::refreshing() const {
+    return mode_ != Mode::Error && rs_.statusBar && (rs_.showTime || (rs_.showBattery && !batteryDir_.empty()));
 }
 
 // ----------------------------------------------------------------- panels ---
@@ -137,6 +150,13 @@ int Reader::brightness() const {
 void Reader::setBrightness(int level) {
     if (maxBrightness_ <= 0) return;
     writeFile(platform.backlight + "/brightness", std::to_string(std::clamp<long>(level, 1, maxBrightness_)));
+}
+
+void Reader::readBattery() {
+    long v;
+    battery_ = !batteryDir_.empty() && readLong(batteryDir_ + "/capacity", v) ? std::clamp((int)v, 0, 100) : -1;
+    std::string status = battery_ >= 0 ? readLine(batteryDir_ + "/status") : "";
+    charging_ = status == "Charging" || status == "Full";
 }
 
 void Reader::openSettings() {
@@ -217,8 +237,25 @@ void Reader::openSettings() {
     }
     m.push_back(items::toggle("chart-column", "Status bar", [this] { return rs_.statusBar; }, [this](bool v) {
         rs_.statusBar = v;
+        // The status item rows appear or disappear: rebuild after the menu input.
+        rebuildSettings_ = true;
         apply(false);
     }));
+    if (rs_.statusBar) {
+        auto item = [&](const char* name, bool* flag) {
+            MenuItem t = items::toggle("", name, [flag] { return *flag; }, [this, flag](bool v) {
+                *flag = v;
+                dirty_ = true;
+            });
+            t.indent = true;
+            m.push_back(std::move(t));
+        };
+        item("Chapter", &rs_.showChapter);
+        item("Pages", &rs_.showPages);
+        item("Progress", &rs_.showProgress);
+        item("Reading time", &rs_.showTime);
+        if (!batteryDir_.empty()) item("Battery", &rs_.showBattery);
+    }
     if (maxBrightness_ > 0)
         m.push_back(items::level("sun", "Brightness", (int)maxBrightness_, [this] { return brightness(); },
                                  [this](int v) { setBrightness(v); }));
@@ -238,6 +275,8 @@ void Reader::closePanel() {
 void Reader::input(const KeyEvent& ev) {
     static const bool debug = getenv("KENNEL_DEBUG_INPUT") != nullptr;
     if (debug) logf("key %d%s", (int)ev.key, ev.repeat ? " repeat" : "");
+    readTime_ = readingTime();
+    activeAt_ = anim::now();
     dirty_ = true;
     switch (mode_) {
         case Mode::Error:
@@ -295,14 +334,41 @@ void Reader::drawStatus() {
     if (!rs_.statusBar) return;
     float y = gfx.H - kStatusH;
     float margin = (float)rs_.marginPx();
-    int ch = book_.chapterAt(top_.paragraph);
-    std::string title = ch >= 0 ? book_.chapters[ch].title : book_.title;
-    double frac = atEnd() ? 1.0 : (double)layout_.offset(top_) / std::max<uint64_t>(1, book_.size);
-    std::string pct = strprintf("%d%%", (int)(frac * 100));
-    float th = gfx.lineHeight(Font::Small);
-    float pw = gfx.measure(Font::Small, pct);
-    gfx.text(Font::Small, title, margin, y + (kStatusH - th) / 2 - 1, rs_.dim(), gfx.W - 2 * margin - pw - 16);
-    gfx.text(Font::Small, pct, gfx.W - margin, y + (kStatusH - th) / 2 - 1, rs_.dim(), 0, Align::Right);
+    float ty = y + (kStatusH - gfx.lineHeight(Font::Small)) / 2 - 1;
+    Color dim = rs_.dim();
+    bool end = atEnd();
+    double frac = end ? 1.0 : (double)layout_.offset(top_) / std::max<uint64_t>(1, book_.size);
+
+    // Right to left: battery, reading time, progress, pages; the chapter takes the remaining width.
+    float rx = gfx.W - margin;
+    auto item = [&](const char* icon, const std::string& value) {
+        rx -= gfx.measure(Font::Small, value);
+        gfx.text(Font::Small, value, rx, ty, dim);
+        if (icon) {
+            rx -= 19;
+            gfx.icon(icon, rx, y + (kStatusH - 16) / 2 - 1, 16, dim);
+        }
+        rx -= 16;
+    };
+    if (rs_.showBattery && battery_ >= 0) {
+        const char* icon = charging_ ? "battery-charging" : battery_ <= 10 ? "battery-warning" : battery_ <= 35 ? "battery-low"
+                         : battery_ <= 70 ? "battery-medium" : "battery-full";
+        item(icon, strprintf("%d%%", battery_));
+    }
+    if (rs_.showTime) item("timer", formatClock(readingTime()));
+    if (rs_.showProgress) item(nullptr, strprintf("%d%%", (int)(frac * 100)));
+    if (rs_.showPages && layout_.complete()) {
+        // Pages are screens as turned with Left/Right; the last one ends at the last line.
+        int step = std::max(1, visibleLines() - 1);
+        int last = std::max(0, layout_.lineCount() - visibleLines());
+        int total = (last + step - 1) / step + 1;
+        int page = end ? total : std::min(total, layout_.lineIndex(top_) / step + 1);
+        item(nullptr, strprintf("%d / %d", page, total));
+    }
+    if (rs_.showChapter && rx - margin > 32) {
+        int ch = book_.chapterAt(top_.paragraph);
+        gfx.text(Font::Small, ch >= 0 ? book_.chapters[ch].title : book_.title, margin, ty, dim, rx - margin);
+    }
     gfx.fill({0, gfx.H - 2, gfx.W, 2}, fade(rs_.dim(), 0.25f));
     gfx.fill({0, gfx.H - 2, std::round(gfx.W * (float)frac), 2}, accent());
 }
@@ -423,6 +489,12 @@ int Reader::run(int argc, char** argv) {
     }
     if (!gfx.init(platform.width, platform.height, platform.fullscreen)) return 1;
     if (!platform.backlight.empty()) readLong(platform.backlight + "/max_brightness", maxBrightness_);
+    for (const auto& dir : glob("/sys/class/power_supply/*"))
+        if (readLine(dir + "/type") == "Battery") {
+            batteryDir_ = dir;
+            break;
+        }
+    readBattery();
 
     std::string name = baseName(bookPath_);
     opening(name.substr(0, name.rfind('.')));
@@ -442,7 +514,9 @@ int Reader::run(int argc, char** argv) {
         }
         if (mode_ != Mode::Error) {
             relayout();
-            top_ = layout_.find(loadPosition(bookPath_));
+            ReadPosition pos = loadPosition(bookPath_);
+            top_ = layout_.find(pos.offset);
+            readTime_ = pos.seconds;
         }
     }
 
@@ -453,13 +527,20 @@ int Reader::run(int argc, char** argv) {
     int perfFrames = 0;
     std::vector<KeyEvent> keys;
 
+    anim::tick();
+    activeAt_ = anim::now();
+    refreshAt_ = anim::now() + kRefresh;
     while (running_) {
         anim::tick();
         int timeout = posDirty_ ? (int)std::max(0.0, (scrolledAt_ + kSaveDelay - anim::now()) * 1000) : -1;
         int repeat = ::input.timeoutMs();
         if (repeat >= 0) timeout = timeout < 0 ? repeat : std::min(timeout, repeat);
+        if (refreshing()) {
+            int refresh = (int)std::max(0.0, (refreshAt_ - anim::now()) * 1000);
+            timeout = timeout < 0 ? refresh : std::min(timeout, refresh);
+        }
         if (!script_.empty()) timeout = timeout < 0 ? 50 : std::min(timeout, 50);
-        if (dirty_ || !gamepadStarted) timeout = 0;
+        if (dirty_ || !gamepadStarted || countingPages()) timeout = 0;
         SDL_Event ev;
         bool got = timeout < 0 ? SDL_WaitEvent(&ev) : SDL_WaitEventTimeout(&ev, timeout);
         keys.clear();
@@ -474,6 +555,14 @@ int Reader::run(int argc, char** argv) {
         automate(keys);
         for (const auto& k : keys) input(k);
         if (posDirty_ && anim::now() - scrolledAt_ >= kSaveDelay) savePos();
+        if (gamepadStarted && countingPages() && layout_.buildAll(kBuildSlice)) dirty_ = true;
+        if (anim::now() >= refreshAt_) {
+            refreshAt_ = anim::now() + kRefresh;
+            if (refreshing()) {
+                readBattery();
+                dirty_ = true;
+            }
+        }
 
         if (dirty_ && running_) {
             dirty_ = false;
