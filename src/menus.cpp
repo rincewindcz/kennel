@@ -46,21 +46,34 @@ int usbModeIndex() {
     return 0;
 }
 
+// The switch runs in the background (the USB gadget restarts for a second or two); the row
+// shows the new mode at once and ignores input until the switch is done.
 MenuItem usbModeItem() {
+    struct State {
+        int current = 0, switching = -1;
+    };
     std::vector<std::string> labels;
     for (const auto& m : platform.usbModes) labels.push_back(m.first);
-    auto current = std::make_shared<int>(usbModeIndex());
-    return items::choice("usb", "USB mode", labels, [current] { return *current; }, [current](int i) {
-        const auto& [label, value] = platform.usbModes[i];
-        int status = 0;
-        std::string out = runCapture(replaceAll(platform.usbModeSet, "%m", shellQuote(value)), &status);
-        if (status == 0) {
-            *current = i;
-            app.toast("USB mode: " + label, "usb", theme::good);
-        } else {
-            app.toast("USB mode change failed: " + trim(out), "triangle-alert", theme::bad);
-        }
-    });
+    auto state = std::make_shared<State>();
+    state->current = usbModeIndex();
+    return items::choice("usb", "USB mode", labels,
+                         [state] { return state->switching >= 0 ? state->switching : state->current; },
+                         [state](int i) {
+                             if (state->switching >= 0) return;
+                             state->switching = i;
+                             const auto& [label, value] = platform.usbModes[i];
+                             app.runAsync(replaceAll(platform.usbModeSet, "%m", shellQuote(value)),
+                                          [state, i, label](int status, const std::string& out) {
+                                              state->switching = -1;
+                                              if (status == 0) {
+                                                  state->current = i;
+                                                  app.toast("USB mode: " + label, "usb", theme::good);
+                                              } else {
+                                                  app.toast("USB mode change failed: " + trim(out), "triangle-alert",
+                                                            theme::bad);
+                                              }
+                                          });
+                         });
 }
 
 void setLauncher(bool kennel) {

@@ -1,8 +1,10 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "anim.h"
@@ -66,6 +68,8 @@ public:
     std::string autolaunchId() const;
     void reloadCatalog();
     void runSystem(const std::string& command, const std::string& failure);
+    // Runs command on a worker thread; done(status, output) is called on the main loop.
+    void runAsync(const std::string& command, std::function<void(int, const std::string&)> done);
     void quit(int code);
     void switchToPrevious();
     void restart();
@@ -98,6 +102,13 @@ private:
         std::string icon, label;
         std::function<void()> action;
     };
+    struct AsyncJob {
+        std::thread thread;
+        std::atomic<bool> finished{false};
+        int status = 0;
+        std::string output;
+        std::function<void(int, const std::string&)> done;
+    };
     struct Toast {
         std::string text, icon;
         Color color;
@@ -118,9 +129,11 @@ private:
     void checkBattery();
     void reportLastSession();
     void automate(std::vector<KeyEvent>& keys);
+    void finishJobs();
 
     std::vector<std::unique_ptr<Screen>> stack_;
     std::vector<std::unique_ptr<Screen>> pending_;
+    std::vector<std::unique_ptr<AsyncJob>> jobs_;
     int dock_ = -1;
     anim::Tween dockFocus_;
     Toast toast_;

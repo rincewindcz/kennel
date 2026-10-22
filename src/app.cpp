@@ -79,6 +79,37 @@ void App::runSystem(const std::string& command, const std::string& failure) {
     }
 }
 
+void App::runAsync(const std::string& command, std::function<void(int, const std::string&)> done) {
+    auto job = std::make_unique<AsyncJob>();
+    job->done = std::move(done);
+    AsyncJob* j = job.get();
+    j->thread = std::thread([j, command] {
+        j->output = runCapture(command, &j->status);
+        j->finished = true;
+        SDL_Event ev{};
+        ev.type = SDL_EVENT_USER;
+        SDL_PushEvent(&ev);
+    });
+    jobs_.push_back(std::move(job));
+}
+
+void App::finishJobs() {
+    for (size_t i = 0; i < jobs_.size();) {
+        AsyncJob& j = *jobs_[i];
+        if (!j.finished) {
+            ++i;
+            continue;
+        }
+        j.thread.join();
+        auto done = std::move(j.done);
+        int status = j.status;
+        std::string output = std::move(j.output);
+        jobs_.erase(jobs_.begin() + (long)i);
+        if (done) done(status, output);
+        dirty = true;
+    }
+}
+
 void App::powerOff() {
     confirm("power", "Power off?", "The device shuts down.", "Power off", [this] {
         saveState();
@@ -688,6 +719,7 @@ int App::run(int argcIn, char** argvIn) {
         now = anim::now();
         input.tick(keys);
         automate(keys);
+        finishJobs();
         for (const auto& k : keys) dispatch(k);
 
         if (now >= nextPoll_) {
@@ -718,6 +750,7 @@ int App::run(int argcIn, char** argvIn) {
     }
 
     saveState();
+    for (auto& j : jobs_) j->thread.join();
     art.stop();
     sys.shutdown();
     gfx.shutdown();
