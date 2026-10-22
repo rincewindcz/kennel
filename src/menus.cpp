@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <memory>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -35,6 +36,31 @@ std::vector<std::string> categoryOrder() {
 bool launcherIsKennel() {
     std::string script = readFile(paths.expand(platform.launcherScript)).value_or("");
     return script.find(paths.exe) != std::string::npos;
+}
+
+// Index into platform.usbModes of the mode usb_mode prints; 0 when unknown.
+int usbModeIndex() {
+    std::string cur = trim(runCapture(platform.usbMode));
+    for (size_t i = 0; i < platform.usbModes.size(); ++i)
+        if (platform.usbModes[i].second == cur) return (int)i;
+    return 0;
+}
+
+MenuItem usbModeItem() {
+    std::vector<std::string> labels;
+    for (const auto& m : platform.usbModes) labels.push_back(m.first);
+    auto current = std::make_shared<int>(usbModeIndex());
+    return items::choice("usb", "USB mode", labels, [current] { return *current; }, [current](int i) {
+        const auto& [label, value] = platform.usbModes[i];
+        int status = 0;
+        std::string out = runCapture(replaceAll(platform.usbModeSet, "%m", shellQuote(value)), &status);
+        if (status == 0) {
+            *current = i;
+            app.toast("USB mode: " + label, "usb", theme::good);
+        } else {
+            app.toast("USB mode change failed: " + trim(out), "triangle-alert", theme::bad);
+        }
+    });
 }
 
 void setLauncher(bool kennel) {
@@ -285,6 +311,8 @@ void App::openSettings() {
             settings.reportErrors = v;
             save();
         }));
+        if (!platform.usbModeSet.empty() && !platform.usbMode.empty() && !platform.usbModes.empty())
+            m.push_back(usbModeItem());
         m.push_back(items::link("hard-drive", "Backup", [] { openBackup(); }));
         m.push_back(items::toggle("terminal", "Expert mode", [] { return settings.expert; }, [](bool v) {
             settings.expert = v;

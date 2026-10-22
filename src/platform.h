@@ -37,6 +37,9 @@ struct Platform {
     std::string launcherScript;
     std::string previousLauncher;
 
+    std::string usbMode, usbModeSet;  // usbModeSet: %m is the quoted mode value
+    std::vector<std::pair<std::string, std::string>> usbModes;  // label, value
+
     int width = 640, height = 480;
     bool fullscreen = true;
 

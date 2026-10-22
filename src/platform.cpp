@@ -47,6 +47,15 @@ void Platform::load(const std::string& path) {
         str("hud_env", hudEnv);
         str("launcher_script", launcherScript);
         str("previous_launcher", previousLauncher);
+        str("usb_mode", usbMode);
+        str("usb_mode_set", usbModeSet);
+        if (const IniEntry* e = p->find("usb_modes")) {
+            usbModes.clear();
+            for (const auto& m : split(e->value, ';')) {
+                size_t colon = m.find(':');
+                if (colon != std::string::npos) usbModes.emplace_back(m.substr(0, colon), m.substr(colon + 1));
+            }
+        }
         str("kernel_log", kernelLog);
         list("mounts", mounts);
         width = atoi(p->get("width", std::to_string(width)).c_str());

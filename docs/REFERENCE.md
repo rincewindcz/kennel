@@ -255,6 +255,7 @@ Battery history: kennel appends a sample to `battery.tsv` every minute and when 
 | `fallback_fonts` | fonts for glyphs missing in Inter (CJK) |
 | `hud_env` | environment assignment for "Gallium HUD on next launch" |
 | `launcher_script`, `previous_launcher` | launcher selection in Settings |
+| `usb_mode`, `usb_mode_set`, `usb_modes` | USB mode in Settings: `usb_mode` prints the current mode, `usb_mode_set` switches (`%m` the quoted mode), `usb_modes` lists `label:mode` pairs, `;`-separated; any of them empty hides the setting |
 | `kernel_log` | command printing the kernel log |
 | `mounts` | file systems shown in the status page |
 | `width`, `height`, `fullscreen` | logical screen size, window mode |
