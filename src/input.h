@@ -11,6 +11,7 @@ enum class Key { None, Up, Down, Left, Right, Confirm, Back, X, Y, L1, R1, L2, R
 struct KeyEvent {
     Key key = Key::None;
     bool repeat = false;
+    bool stick = false;  // from the analog stick rather than the d-pad or a key
 };
 
 class Input {
@@ -27,13 +28,14 @@ public:
 private:
     Key fromButton(int button) const;
     Key fromKeycode(SDL_Keycode k) const;
-    void press(Key k, std::vector<KeyEvent>& out);
+    void press(Key k, std::vector<KeyEvent>& out, bool stick = false);
     void release(Key k);
     void stick(std::vector<KeyEvent>& out);
     bool repeats(Key k) const;
 
     SDL_Gamepad* pad_ = nullptr;
     Key held_ = Key::None;
+    bool heldStick_ = false;
     double heldSince_ = 0, nextRepeat_ = 0;
     int stickX_ = 0, stickY_ = 0;
     Key stickDir_ = Key::None;

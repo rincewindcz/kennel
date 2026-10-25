@@ -235,6 +235,8 @@ void Reader::openSettings() {
         colour("Background", &rs_.customBg);
         colour("Text", &rs_.customFg);
     }
+    m.push_back(items::choice("scroll-text", "Up/Down", {"Line by line", "Full page"}, [this] { return (int)rs_.scroll; },
+                              [this](int v) { rs_.scroll = (ReadSettings::Scroll)v; }));
     m.push_back(items::toggle("chart-column", "Status bar", [this] { return rs_.statusBar; }, [this](bool v) {
         rs_.statusBar = v;
         // The status item rows appear or disappear: rebuild after the menu input.
@@ -297,9 +299,10 @@ void Reader::input(const KeyEvent& ev) {
         case Mode::Reading: break;
     }
     int page = std::max(1, visibleLines() - 1);
+    int vertical = rs_.scroll == ReadSettings::Scroll::Page ? page : 1;
     switch (ev.key) {
-        case Key::Down: scroll(1); break;
-        case Key::Up: scroll(-1); break;
+        case Key::Down: scroll(vertical); break;
+        case Key::Up: scroll(-vertical); break;
         case Key::Right:
         case Key::R1: scroll(page); break;
         case Key::Left:

@@ -12,6 +12,7 @@ struct ReadSettings {
     enum class Format { Plain, Styled };
     enum class Paragraphs { Indent, Spacing };
     enum class Theme { Dark, Sepia, Light, Custom };
+    enum class Scroll { Line, Page };  // what Up/Down move by
 
     std::string family = "Literata";
     int size = 22;
@@ -21,6 +22,7 @@ struct ReadSettings {
     Format format = Format::Styled;
     Paragraphs paragraphs = Paragraphs::Indent;
     Theme theme = Theme::Dark;
+    Scroll scroll = Scroll::Line;
     bool statusBar = true;
     bool showChapter = true, showPages = true, showProgress = true, showTime = true, showBattery = true;
     uint32_t customBg = 0x1e1e1e, customFg = 0xd4d4d4;

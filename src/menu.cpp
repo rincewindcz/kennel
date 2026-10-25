@@ -67,8 +67,8 @@ MenuItem choice(std::string icon, std::string label, std::vector<std::string> ch
     return m;
 }
 MenuItem level(std::string icon, std::string label, int maxLevel, std::function<int()> get, std::function<void(int)> set) {
-    MenuItem m = slider(std::move(icon), std::move(label), 1, std::max(1, maxLevel), std::max(1, maxLevel / 20), std::move(get),
-                        std::move(set));
+    MenuItem m = slider(std::move(icon), std::move(label), 1, std::max(1, maxLevel), 1, std::move(get), std::move(set));
+    m.stickStep = std::max(1, (int)std::lround(maxLevel / 10.0));
     m.format = [maxLevel](int v) { return strprintf("%d%%", (int)std::lround(v * 100.0 / std::max(1, maxLevel))); };
     return m;
 }
@@ -147,7 +147,8 @@ bool Menu::input(const KeyEvent& ev) {
                 return true;
             }
             if (m->type == MenuItem::Type::Slider) {
-                m->setInt(std::clamp(m->getInt() + dir * m->step, m->min, m->max));
+                int step = ev.stick && m->stickStep > 0 ? m->stickStep : m->step;
+                m->setInt(std::clamp(m->getInt() + dir * step, m->min, m->max));
                 return true;
             }
             if (m->type == MenuItem::Type::Toggle) {

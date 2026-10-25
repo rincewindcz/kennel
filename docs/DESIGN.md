@@ -106,7 +106,7 @@ Left: hints of the top screen, with button glyphs from `SDL_GetGamepadButtonLabe
 
 | Input | Home | Lists and panels |
 |---|---|---|
-| left/right, left stick | previous/next card; a fresh press at an end wraps; held: 350 ms delay, 60 ms rate, 30 ms after 2 s | change value |
+| left/right, left stick | previous/next card; a row of three or more is circular: the neighbours of an end card are drawn from the other end and a fresh press at an end scrolls on to it; held: 350 ms delay, 60 ms rate, 30 ms after 2 s | change value; backlight levels: d-pad one level, stick a tenth of the range |
 | up/down | previous/next category, slide and fade | move, wrapping on a fresh press |
 | L1 / R1 | 5 cards back/forward | page |
 | L2 / R2 | start of the previous/next initial letter, shown in a toast | |
@@ -335,7 +335,7 @@ E-book reader built from the same repository (`kennel-read`), sharing kennelcore
 
 ### 14.2 Reading
 
-Text is laid out in lines on a uniform grid (line height times line spacing), so scrolling moves by whole lines: Up/Down one line with the shared key repeat (350 ms delay, 60 ms, 30 ms after 2 s), Left/Right and L1/R1 one screen, L2/R2 to the previous or next chapter, SELECT the chapter list, START the settings panel, B saves and exits. Nothing animates. A thin status bar shows the chapter, the page and page count, the progress in percent, the reading time and the battery, each switchable. The page count needs the whole book laid out: the main loop lays out paragraphs in 20 ms slices while idle (`Layout::buildAll`) and shows the count once done. Reading time adds the gap between button presses, capped at 3 minutes; the status bar refreshes every 30 s for it and the battery.
+Text is laid out in lines on a uniform grid (line height times line spacing), so scrolling moves by whole lines: Up/Down one line (or one screen with "Up/Down: Full page") with the shared key repeat (350 ms delay, 60 ms, 30 ms after 2 s), Left/Right and L1/R1 one screen, L2/R2 to the previous or next chapter, SELECT the chapter list, START the settings panel, B saves and exits. Nothing animates. A thin status bar shows the chapter, the page and page count, the progress in percent, the reading time and the battery, each switchable. The page count needs the whole book laid out: the main loop lays out paragraphs in 20 ms slices while idle (`Layout::buildAll`) and shows the count once done. Reading time adds the gap between button presses, capped at 3 minutes; the status bar refreshes every 30 s for it and the battery.
 
 | Setting | Values |
 |---|---|
@@ -347,6 +347,7 @@ Text is laid out in lines on a uniform grid (line height times line spacing), so
 | Formatting | plain (one style), styled (bold headings, italic and bold runs) |
 | Paragraphs | first-line indent, spacing (blank line) |
 | Theme | dark, sepia, light |
+| Up/Down | line by line, full page |
 | Status bar | on, off; chapter, pages, progress, reading time, battery each on or off |
 | Brightness | platform backlight |
 

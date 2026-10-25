@@ -31,7 +31,8 @@ private:
         int index = 0;
     };
 
-    void select(int index, bool animate = true);
+    static bool circular(const Row& row) { return row.entries.size() > 2; }
+    void select(int index, bool animate = true, int wrap = 0);
     void moveRow(int dir);
     void jumpLetter(int dir);
     void drawRow(const Row& row, float scroll, float dy, float alpha);

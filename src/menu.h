@@ -20,6 +20,7 @@ struct MenuItem {
     std::function<int()> getIndex;
     std::function<void(int)> setIndex;
     int min = 0, max = 100, step = 5;
+    int stickStep = 0;  // step on the analog stick, 0: same as step
     std::function<int()> getInt;
     std::function<void(int)> setInt;
     std::function<std::string()> value;
@@ -41,8 +42,8 @@ MenuItem choice(std::string icon, std::string label, std::vector<std::string> ch
                 std::function<void(int)> set);
 MenuItem slider(std::string icon, std::string label, int min, int max, int step, std::function<int()> get,
                 std::function<void(int)> set);
-// Slider over raw hardware levels 1..maxLevel (e.g. a backlight), shown in percent. Every step
-// changes the level, also when the device has only a few levels.
+// Slider over raw hardware levels 1..maxLevel (e.g. a backlight), shown in percent. The d-pad steps
+// one level, the stick a tenth of the range; every step changes the level.
 MenuItem level(std::string icon, std::string label, int maxLevel, std::function<int()> get, std::function<void(int)> set);
 }  // namespace items
 

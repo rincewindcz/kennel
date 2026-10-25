@@ -68,11 +68,12 @@ Key Input::fromKeycode(SDL_Keycode k) const {
     }
 }
 
-void Input::press(Key k, std::vector<KeyEvent>& out) {
+void Input::press(Key k, std::vector<KeyEvent>& out, bool stick) {
     if (k == Key::None) return;
-    out.push_back({k, false});
+    out.push_back({k, false, stick});
     if (repeats(k)) {
         held_ = k;
+        heldStick_ = stick;
         heldSince_ = clockNow();
         nextRepeat_ = heldSince_ + kRepeatDelay;
     }
@@ -104,7 +105,7 @@ void Input::stick(std::vector<KeyEvent>& out) {
     if (next == stickDir_) return;
     if (held_ == stickDir_) held_ = Key::None;
     stickDir_ = next;
-    press(next, out);
+    press(next, out, true);
 }
 
 void Input::handle(const SDL_Event& ev, std::vector<KeyEvent>& out) {
@@ -153,7 +154,7 @@ void Input::tick(std::vector<KeyEvent>& out) {
     if (held_ == Key::None) return;
     double now = clockNow();
     if (now < nextRepeat_) return;
-    out.push_back({held_, true});
+    out.push_back({held_, true, heldStick_});
     nextRepeat_ = now + (now - heldSince_ > kFastAfter ? kFastRate : kRepeatRate);
 }
 

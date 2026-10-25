@@ -59,6 +59,7 @@ void ReadSettings::load(const std::string& file) {
     format = pick(s->get("format"), {"plain", "styled"}, format);
     paragraphs = pick(s->get("paragraphs"), {"indent", "spacing"}, paragraphs);
     theme = pick(s->get("theme"), {"dark", "sepia", "light", "custom"}, theme);
+    scroll = pick(s->get("scroll"), {"line", "page"}, scroll);
     parseColor(s->get("custom_bg"), customBg);
     parseColor(s->get("custom_fg"), customFg);
     auto flag = [s](const char* key, bool& v) {
@@ -78,11 +79,13 @@ bool ReadSettings::save() const {
     const char* f[] = {"plain", "styled"};
     const char* p[] = {"indent", "spacing"};
     const char* t[] = {"dark", "sepia", "light", "custom"};
+    const char* sc[] = {"line", "page"};
     std::string out = "[read]\n";
     out += "family=" + family + "\n";
     out += strprintf("size=%d\nspacing=%d\n", size, spacing);
     out += strprintf("margins=%s\nalign=%s\nformat=%s\n", m[(int)margins], a[(int)align], f[(int)format]);
-    out += strprintf("paragraphs=%s\ntheme=%s\nstatus_bar=%d\n", p[(int)paragraphs], t[(int)theme], statusBar);
+    out += strprintf("paragraphs=%s\ntheme=%s\nscroll=%s\nstatus_bar=%d\n", p[(int)paragraphs], t[(int)theme], sc[(int)scroll],
+                     statusBar);
     out += strprintf("status_chapter=%d\nstatus_pages=%d\nstatus_progress=%d\nstatus_time=%d\nstatus_battery=%d\n", showChapter,
                      showPages, showProgress, showTime, showBattery);
     out += strprintf("custom_bg=#%06x\ncustom_fg=#%06x\n", customBg & 0xffffff, customFg & 0xffffff);

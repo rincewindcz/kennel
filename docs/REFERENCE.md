@@ -10,7 +10,7 @@ Design and implementation notes: [DESIGN.md](DESIGN.md).
 
 | Area | Content |
 |---|---|
-| Home | one category at a time; carousel with a large focused card (300x200), neighbours scaled and dimmed; title, play time, last played and session count under the card; blurred game art as background |
+| Home | one category at a time; carousel with a large focused card (300x200), neighbours scaled and dimmed, circular with more than two entries (the first card has the last one on its left); title, play time, last played and session count under the card; blurred game art as background |
 | Categories | Continue (recently played), Favorites, then the `.puppy` categories; hide and reorder in Settings |
 | Hidden entries | Details > Hide from Home; Settings > Hidden entries lists them by category and shows them again |
 | Appearance | accent colours Blue, Teal, Amber, Rose, Violet, Green, Crimson or a custom RGB colour; background gradient, game art of the selected entry, or a wallpaper (Files: X on an image or in the image viewer, Set as wallpaper); animation speed |
@@ -144,14 +144,14 @@ Other formats (PDF, AZW3, DOCX) are converted on a computer, for example with ca
 
 | Control | Action |
 |---|---|
-| Up / Down | one line (holding accelerates) |
+| Up / Down | one line or one screen, see settings (holding accelerates) |
 | Left / Right, L1 / R1 | one screen |
 | L2 / R2 | previous / next chapter |
 | SELECT | chapter list |
 | START | settings panel |
 | B | save the position and exit |
 
-Settings: font family (every family found, see below), size 14 to 36, line spacing 1.0 to 2.0, margins (narrow, normal, wide), alignment (left or justified), formatting (plain: one style; styled: bold headings, italic and bold text), paragraphs (first-line indent or spacing), theme (dark, sepia, light, custom), status bar on or off with each item on or off (chapter, pages, progress in percent, reading time, battery), brightness. The custom theme shows background and text colour rows with R, G and B sliders (0 to 255); the colours are stored as `custom_bg` and `custom_fg` (`#rrggbb`) in `read.ini` and can be edited there. Brightness sliders here and in kennel's quick settings step one backlight level at a time (the console has 10) and never go below level 1. The reading position is a byte offset into the book text, so it survives font and layout changes; progress is shown in percent. Pages are screens as turned with Left/Right (one line of overlap); the page count appears once the whole book is laid out in the background and is recounted after font or layout changes. Reading time is the active time per book: the gap between two button presses counts up to 3 minutes, and the total is stored with the position.
+Settings: font family (every family found, see below), size 14 to 36, line spacing 1.0 to 2.0, margins (narrow, normal, wide), alignment (left or justified), formatting (plain: one style; styled: bold headings, italic and bold text), paragraphs (first-line indent or spacing), theme (dark, sepia, light, custom), Up/Down by line or by full page (`scroll=line` or `page` in `read.ini`), status bar on or off with each item on or off (chapter, pages, progress in percent, reading time, battery), brightness. The custom theme shows background and text colour rows with R, G and B sliders (0 to 255); the colours are stored as `custom_bg` and `custom_fg` (`#rrggbb`) in `read.ini` and can be edited there. Brightness sliders here and in kennel's quick settings step one backlight level with the d-pad and a tenth of the range with the stick (the console has 10 levels, so both step one) and never go below level 1. The reading position is a byte offset into the book text, so it survives font and layout changes; progress is shown in percent. Pages are screens as turned with Left/Right (one line of overlap); the page count appears once the whole book is laid out in the background and is recounted after font or layout changes. Reading time is the active time per book: the gap between two button presses counts up to 3 minutes, and the total is stored with the position.
 
 Reading fonts: Literata (default), Inter and Atkinson are bundled; `kennel-fonts.zip` adds Alegreya, Bitter, Charis SIL, Crimson Pro, EB Garamond, Lora, Merriweather, PT Serif, Source Serif. User fonts go to `$XDG_DATA_HOME/kennel/fonts/` (`~/.local/share/kennel/fonts/`) as `<Family>-Regular.ttf`, optionally with `-Bold`, `-Italic` and `-BoldItalic`; missing styles are synthesized. Every family with a Regular file is listed, sorted by name; a file name without spaces is shown split into words (`CharisSIL` as Charis SIL). A user font replaces a bundled family of the same name.
 

@@ -159,13 +159,16 @@ void HomeScreen::resumed() {
     rebuild();
 }
 
-void HomeScreen::select(int index, bool animate) {
+// The scroll position of a circular row is not limited to the entry range, so a wrap (-1 or 1)
+// moves on to the other end instead of scrolling back over the whole row.
+void HomeScreen::select(int index, bool animate, int wrap) {
     Row& r = rows_[row_];
     index = std::clamp(index, 0, (int)r.entries.size() - 1);
     if (index == r.index) return;
+    float target = scroll_.to + (wrap ? (float)wrap : (float)(index - r.index));
     r.index = index;
-    if (animate) scroll_.go((float)index, 0.22f);
-    else scroll_.set((float)index);
+    if (animate) scroll_.go(target, 0.22f);
+    else scroll_.set(target);
     info_.set(0);
     info_.go(1, 0.18f);
     changedAt_ = anim::now();
@@ -212,11 +215,11 @@ void HomeScreen::input(const KeyEvent& ev) {
     int n = (int)r.entries.size();
     switch (ev.key) {
         case Key::Left:
-            if (r.index == 0 && !ev.repeat && n > 2) select(n - 1, false);
+            if (r.index == 0 && !ev.repeat && circular(r)) select(n - 1, true, -1);
             else select(r.index - 1);
             break;
         case Key::Right:
-            if (r.index == n - 1 && !ev.repeat && n > 2) select(0, false);
+            if (r.index == n - 1 && !ev.repeat && circular(r)) select(0, true, 1);
             else select(r.index + 1);
             break;
         case Key::L1: select(r.index - 5); break;
@@ -307,16 +310,22 @@ void HomeScreen::drawHeader(const Row& row, float dy, float alpha) {
 
 void HomeScreen::drawRow(const Row& row, float scroll, float dy, float alpha) {
     int n = (int)row.entries.size();
-    int first = std::max(0, (int)std::floor(scroll) - 3), last = std::min(n - 1, (int)std::ceil(scroll) + 3);
+    bool wraps = circular(row);
+    // Slots are positions on the carousel; a circular row shows entry slot mod n in every slot.
+    auto entry = [&](int slot) { return entryAt(row, wraps ? (slot % n + n) % n : slot); };
+    int first = (int)std::floor(scroll) - 3, last = (int)std::ceil(scroll) + 3;
+    if (!wraps) first = std::max(0, first), last = std::min(n - 1, last);
     std::vector<int> order;
     for (int i = first; i <= last; ++i) order.push_back(i);
     std::sort(order.begin(), order.end(), [&](int a, int b) { return std::fabs(a - scroll) > std::fabs(b - scroll); });
 
     for (int i : order) {
-        const Entry* e = entryAt(row, i);
+        const Entry* e = entry(i);
         float d = i - scroll, ad = std::fabs(d);
         float s = 1 - (1 - kSideScale) * std::min(ad, 1.f);
         float a = alpha * (1 - 0.45f * std::min(ad, 1.f)) * std::clamp(3.2f - ad, 0.f, 1.f);
+        // Each entry once: the copies n slots apart cross-fade around half a row from the focus.
+        if (wraps) a *= std::clamp(n / 2.f + 0.5f - ad, 0.f, 1.f);
         if (a <= 0.01f) continue;
         float w = kCardW * s, h = kCardH * s;
         SDL_FRect r{gfx.W / 2 + cardX(d) - w / 2, kCarouselY + dy - h / 2, w, h};
@@ -333,14 +342,19 @@ void HomeScreen::drawRow(const Row& row, float scroll, float dy, float alpha) {
         if (app.stats.isFavorite(e->id) && row.kind != Kind::Favorites)
             gfx.icon("star-filled", r.x + r.w - 26 * s - 4, r.y + 8, 20, fade(rgb(0xffb020), a));
     }
-    for (int i = std::max(0, last + 1); i < std::min(n, last + 4); ++i) art.prefetch(*entryAt(row, i));
-    for (int i = std::max(0, first - 3); i < first; ++i) art.prefetch(*entryAt(row, i));
+    for (int i = last + 1; i < last + 4; ++i)
+        if (const Entry* e = entry(i)) art.prefetch(*e);
+    for (int i = first - 3; i < first; ++i)
+        if (const Entry* e = entry(i)) art.prefetch(*e);
 
-    // Position: a thin bar under the carousel.
+    // Position: a thin bar under the carousel. Between the last and the first entry of a circular
+    // row the knob runs back to the start.
     if (n > 1) {
         float tw = 160, tx = (gfx.W - tw) / 2, ty = kCarouselY + kCardH / 2 + 14 + dy;
         gfx.round({tx, ty, tw, 3}, 1.5f, fade(theme::line, alpha));
-        float kw = std::max(12.f, tw / n), kx = tx + (tw - kw) * (scroll / (n - 1));
+        float p = wraps ? std::fmod(std::fmod(scroll, (float)n) + n, (float)n) : scroll;
+        if (p > n - 1) p = (n - 1) * (n - p);
+        float kw = std::max(12.f, tw / n), kx = tx + (tw - kw) * (p / (n - 1));
         gfx.round({kx, ty, kw, 3}, 1.5f, accent(alpha));
     }
 }
