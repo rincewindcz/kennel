@@ -1,5 +1,8 @@
 #include "cover.h"
 
+#include <algorithm>
+#include <cstdio>
+#include <optional>
 #include <vector>
 
 #include "tokenizer.h"
@@ -77,24 +80,27 @@ std::string firstImage(const std::string& page) {
     return {};
 }
 
+// The package document (OPF) named by META-INF/container.xml.
+std::optional<std::string> epubPackage(const ZipArchive& zip, std::string& opfPath) {
+    auto container = zip.read("META-INF/container.xml");
+    if (!container) return std::nullopt;
+    markup::Tokenizer tz(*container);
+    markup::Token t;
+    while (tz.next(t))
+        if (t.type != markup::Token::Type::Close && t.local() == "rootfile")
+            if (const std::string* p = t.attr("full-path")) {
+                opfPath = percentDecode(*p);
+                break;
+            }
+    return opfPath.empty() ? std::nullopt : zip.read(opfPath);
+}
+
 bool epubCover(const std::string& path, std::string& out) {
     ZipArchive zip;
     std::string error;
     if (!zip.open(path, error)) return false;
-    auto container = zip.read("META-INF/container.xml");
-    if (!container) return false;
     std::string opfPath;
-    {
-        markup::Tokenizer tz(*container);
-        markup::Token t;
-        while (tz.next(t))
-            if (t.type != markup::Token::Type::Close && t.local() == "rootfile")
-                if (const std::string* p = t.attr("full-path")) {
-                    opfPath = percentDecode(*p);
-                    break;
-                }
-    }
-    auto opf = opfPath.empty() ? std::nullopt : zip.read(opfPath);
+    auto opf = epubPackage(zip, opfPath);
     if (!opf) return false;
 
     struct Item {
@@ -256,18 +262,142 @@ bool mobiCover(const std::string& path, std::string& out) {
     return false;
 }
 
+std::string readHead(const std::string& path, size_t maxBytes) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return {};
+    std::string out(maxBytes, '\0');
+    out.resize(fread(out.data(), 1, maxBytes, f));
+    fclose(f);
+    return out;
+}
+
+// Text up to the close of `name`, whitespace runs collapsed.
+std::string elementText(markup::Tokenizer& tz, const std::string& name) {
+    std::string out;
+    markup::Token t;
+    while (tz.next(t)) {
+        if (t.type == markup::Token::Type::Close && t.name == name) break;
+        if (t.type == markup::Token::Type::Text) out += t.text;
+    }
+    return out;
+}
+
+std::string collapseSpaces(std::string_view s) {
+    std::string out;
+    for (char c : s) {
+        bool space = c == ' ' || c == '\t' || c == '\n' || c == '\r';
+        if (space && (out.empty() || out.back() == ' ')) continue;
+        out += space ? ' ' : c;
+    }
+    if (!out.empty() && out.back() == ' ') out.pop_back();
+    return out;
+}
+
+bool isMobi(const std::string& e) { return e == "mobi" || e == "azw" || e == "azw3" || e == "prc"; }
+bool isEbook(const std::string& e) { return e == "epub" || e == "fb2" || isMobi(e); }
+
+void epubTitle(const std::string& path, std::string& title, std::string& author) {
+    ZipArchive zip;
+    std::string error, opfPath;
+    if (!zip.open(path, error)) return;
+    auto opf = epubPackage(zip, opfPath);
+    if (!opf) return;
+    markup::Tokenizer tz(*opf);
+    markup::Token t;
+    while (tz.next(t) && (title.empty() || author.empty())) {
+        if (t.type != markup::Token::Type::Open) continue;
+        std::string n = t.local();
+        if (n == "title" && title.empty()) title = elementText(tz, t.name);
+        else if (n == "creator" && author.empty()) author = elementText(tz, t.name);
+        else if (n == "manifest") break;
+    }
+}
+
+// title-info is at the start of the file, before the body and the binaries.
+void fb2Title(const std::string& path, std::string& title, std::string& author) {
+    std::string head = readHead(path, 64 * 1024);
+    markup::Tokenizer tz(head);
+    markup::Token t;
+    bool inTitleInfo = false, inAuthor = false;
+    std::string first, middle, last;
+    while (tz.next(t)) {
+        if (t.type == markup::Token::Type::Text) continue;
+        std::string n = t.local();
+        bool open = t.type == markup::Token::Type::Open;
+        if (n == "title-info") {
+            if (!open) break;
+            inTitleInfo = true;
+        } else if (!inTitleInfo) {
+            continue;
+        } else if (n == "book-title" && open) {
+            title = elementText(tz, t.name);
+        } else if (n == "author" && author.empty()) {
+            inAuthor = open;
+            if (!open) author = collapseSpaces(first + " " + middle + " " + last);
+        } else if (inAuthor && open && (n == "first-name" || n == "middle-name" || n == "last-name")) {
+            (n == "first-name" ? first : n == "middle-name" ? middle : last) = elementText(tz, t.name);
+        }
+    }
+}
+
+// MOBI header full name, EXTH 503 (updated title) and 100 (author) of record 0.
+void mobiTitle(const std::string& path, std::string& title, std::string& author) {
+    std::string d = readHead(path, 78);
+    if (d.size() < 78 || d.compare(60, 8, "BOOKMOBI") != 0) return;
+    uint16_t count = be16(d, 76);
+    if (count == 0) return;
+    d = readHead(path, 78 + (size_t)count * 8);
+    if (d.size() < 78 + (size_t)count * 8) return;
+    size_t r0 = be32(d, 78), r0end = count > 1 ? be32(d, 86) : r0 + 64 * 1024;
+    if (r0end <= r0 || r0end - r0 > 1024 * 1024) return;
+    d = readHead(path, r0end);
+    r0end = std::min(r0end, d.size());
+    if (r0 + 0x84 > r0end || d.compare(r0 + 16, 4, "MOBI") != 0) return;
+    bool cp1252 = be32(d, r0 + 28) == 1252;
+    auto text = [&](size_t at, size_t len) {
+        std::string_view s(d.data() + at, len);
+        return cp1252 || !markup::validUtf8(s) ? markup::cp1252ToUtf8(s) : std::string(s);
+    };
+    uint32_t headerLength = be32(d, r0 + 20), nameOff = be32(d, r0 + 84), nameLen = be32(d, r0 + 88);
+    if (nameOff < r0end - r0 && nameLen <= r0end - r0 - nameOff) title = text(r0 + nameOff, nameLen);
+    if (!(be32(d, r0 + 0x80) & 0x40)) return;
+    size_t exth = r0 + 16 + headerLength;
+    if (exth + 12 > r0end || d.compare(exth, 4, "EXTH") != 0) return;
+    uint32_t exthCount = be32(d, exth + 8);
+    size_t pos = exth + 12;
+    for (uint32_t i = 0; i < exthCount && pos + 8 <= r0end; ++i) {
+        uint32_t type = be32(d, pos), len = be32(d, pos + 4);
+        if (len < 8 || len > r0end - pos) break;
+        if (type == 503) title = text(pos + 8, len - 8);
+        if (type == 100 && author.empty()) author = text(pos + 8, len - 8);
+        pos += len;
+    }
+}
+
 }  // namespace
 
-bool hasEmbeddedCover(const std::string& path) {
-    std::string e = extension(path);
-    return e == "epub" || e == "fb2" || e == "mobi" || e == "azw" || e == "azw3" || e == "prc";
-}
+bool hasEmbeddedCover(const std::string& path) { return isEbook(extension(path)); }
 
 bool extractCover(const std::string& bookPath, std::string& imageBytes) {
     std::string e = extension(bookPath);
     imageBytes.clear();
     if (e == "epub") return epubCover(bookPath, imageBytes);
     if (e == "fb2") return fb2Cover(bookPath, imageBytes);
-    if (e == "mobi" || e == "azw" || e == "azw3" || e == "prc") return mobiCover(bookPath, imageBytes);
+    if (isMobi(e)) return mobiCover(bookPath, imageBytes);
     return false;
+}
+
+bool hasEmbeddedTitle(const std::string& path) { return isEbook(extension(path)); }
+
+void extractTitle(const std::string& bookPath, std::string& title, std::string& author) {
+    std::string e = extension(bookPath);
+    title.clear();
+    author.clear();
+    if (e == "epub") epubTitle(bookPath, title, author);
+    else if (e == "fb2") fb2Title(bookPath, title, author);
+    else if (isMobi(e)) mobiTitle(bookPath, title, author);
+    title = collapseSpaces(title);
+    author = collapseSpaces(author);
+    if (!markup::validUtf8(title)) title.clear();
+    if (!markup::validUtf8(author)) author.clear();
 }

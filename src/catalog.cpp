@@ -71,6 +71,61 @@ std::string guessGlyph(const std::string& category) {
     return "gamepad-2";
 }
 
+struct BookTitle {
+    std::string title, author;
+};
+
+// E-book titles and authors in titles.tsv, keyed by path, size and mtime: reading them opens every book.
+class TitleCache {
+public:
+    explicit TitleCache(std::string file) : file_(std::move(file)) {
+        std::string text = readFile(file_).value_or("");
+        size_t pos = 0;
+        while (pos < text.size()) {
+            size_t end = text.find('\n', pos);
+            if (end == std::string::npos) end = text.size();
+            std::vector<std::string> f;
+            for (size_t a = pos; a <= end;) {
+                size_t b = std::min(text.find('\t', a), end);
+                f.push_back(text.substr(a, b - a));
+                a = b + 1;
+            }
+            if (f.size() == 5) cached_[f[0] + "\t" + f[1] + "\t" + f[2]] = {f[3], f[4]};
+            pos = end + 1;
+        }
+    }
+
+    BookTitle get(const std::string& path) {
+        struct stat st;
+        if (stat(path.c_str(), &st) != 0) return {};
+        std::string key = strprintf("%s\t%lld\t%lld", path.c_str(), (long long)st.st_size, (long long)st.st_mtime);
+        auto it = cached_.find(key);
+        if (it == cached_.end()) {
+            BookTitle t;
+            extractTitle(path, t.title, t.author);
+            it = cached_.emplace(key, std::move(t)).first;
+            changed_ = true;
+        }
+        used_[key] = it->second;
+        return it->second;
+    }
+
+    // Writes the entries looked up by this load, dropping books that are gone or changed.
+    void save() {
+        if (!changed_ && used_.size() == cached_.size()) return;
+        std::string out;
+        for (const auto& [key, t] : used_) out += key + "\t" + t.title + "\t" + t.author + "\n";
+        makeDirs(dirName(file_));
+        writeFileAtomic(file_, out);
+    }
+
+private:
+    std::string file_;
+    std::unordered_map<std::string, BookTitle> cached_;
+    std::map<std::string, BookTitle> used_;
+    bool changed_ = false;
+};
+
 }  // namespace
 
 std::string cleanTitle(const std::string& stem, std::string* tags) {
@@ -132,6 +187,7 @@ void Catalog::load() {
     messages.clear();
     archives.clear();
 
+    TitleCache titles(paths.cache + "/titles.tsv");
     std::vector<Record> records;
     auto upsert = [&](Record rec) {
         for (auto& existing : records) {
@@ -291,6 +347,14 @@ void Catalog::load() {
                 e.category = name;
                 e.name = dot == std::string::npos || dot == 0 ? fname : fname.substr(0, dot);
                 e.title = cleanTitle(e.name, &e.tags);
+                if (hasEmbeddedTitle(fname)) {
+                    BookTitle book = titles.get(fpath);
+                    if (!book.title.empty()) {
+                        e.title = book.title;
+                        if (!book.author.empty())
+                            e.tags = book.author + (e.tags.empty() ? "" : " \xC2\xB7 " + e.tags);
+                    }
+                }
                 e.description = cat.description;
                 e.path = dir + "/" + fname;
                 e.command = fileCommand(s.get("COMMAND"), e.path);
@@ -308,7 +372,10 @@ void Catalog::load() {
             }
             closedir(d);
         }
-        std::sort(found.begin(), found.end(), [](const Entry& a, const Entry& b) { return lower(a.name) < lower(b.name); });
+        std::sort(found.begin(), found.end(), [](const Entry& a, const Entry& b) {
+            std::string ta = lower(a.title), tb = lower(b.title);
+            return ta != tb ? ta < tb : lower(a.name) < lower(b.name);
+        });
         for (auto& e : found) add(std::move(e));
     }
 
@@ -320,6 +387,7 @@ void Catalog::load() {
         }
     }
 
+    titles.save();
     loadMs = (SDL_GetTicksNS() - t0) / 1e6;
     logf("catalog: %zu entries in %zu categories from %zu files, %.1f ms", entries.size(), categories.size(),
          files.size(), loadMs);

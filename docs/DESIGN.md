@@ -121,9 +121,11 @@ The stick uses hysteresis (press at half travel, release at a quarter) so a stic
 
 ## 6. Library
 
-Rows on Home: Continue (last 20 played), Favorites (by title), then the categories in the user order (Settings > Categories, X/Y move), minus hidden ones (platform `hide_categories` until the user changes the list). Empty rows are not shown. Sort within categories: Name (file order for entries, name order for archives, as Puppy), Last played, Play time.
+Rows on Home: Continue (last 20 played), Favorites (by title), then the categories in the user order (Settings > Categories, X/Y move), minus hidden ones (platform `hide_categories` until the user changes the list). Empty rows are not shown. Sort within categories: Name (file order for entries, title order for archives, then file name), Last played, Play time.
 
 Parser: as Puppy (REFERENCE.md, "Library: .puppy files"), plus diagnostics with file and line for ignored sections and replaced definitions, shown in expert mode.
+
+E-book titles: read from the book on the catalog load (EPUB package document, the first 64 KiB of FB2, MOBI record 0) and cached in `titles.tsv` by path, size and mtime; a load with every title cached reads no book.
 
 Art lookup per entry: `ART`, `ART_DIRECTORIES` and `ENTRY_ICONS_DIRECTORIES` (each directory listed once into a stem index, png before jpg before jpeg, exact stem before case-insensitive), `ICON`. Archive entries without an image get a stock card over `DEFAULT_ICON`; category images also come from `system_icons/<category>.png`.
 

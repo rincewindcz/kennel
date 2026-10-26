@@ -130,7 +130,7 @@ glos.py sh '/root/bin/drmshot > /tmp/shot.ppm'      # screen capture, drmshot fr
 
 ## kennel-read
 
-Minimal e-book reader: one font, scrolling by lines, no images, no effects. Opened by kennel from the Books category (`books.puppy`, folders `HOME/books` and `/media/external/books`, per-book images in `books/icons`) or directly: `kennel-read BOOK`. `kennel-read --dump BOOK` prints the parsed book. On goodluckOS HOME is vfat mounted with `iocharset=iso8859-1`: UTF-8 file names (e.g. Czech diacritics) are stored byte for byte, so kennel shows them correctly while a PC browsing HOME over MTP shows them garbled. As with every Puppy archive, files with the same name but different extensions in one category show as one entry (the last one found), so keep one format per book.
+Minimal e-book reader: one font, scrolling by lines, no images, no effects. Opened by kennel from the Books category (`books.puppy`, folders `HOME/books` and `/media/external/books`, per-book images in `books/icons`) or directly: `kennel-read BOOK`. `kennel-read --dump BOOK` prints the parsed book. goodluckOS before the `utf8` vfat mount option decodes file names on HOME as ISO 8859-1: characters outside it (e.g. Czech č, ř, š) show as `?`; books with a title in their metadata show that title instead. As with every Puppy archive, files with the same name but different extensions in one category show as one entry (the last one found), so keep one format per book.
 
 | Format | Extensions | Read | Dropped |
 |---|---|---|---|
@@ -195,6 +195,7 @@ A file opens with its library entry (an archive file the catalog lists), else wi
 | `$XDG_CONFIG_HOME/kennel/kennel.ini` (default `~/.config/kennel`) | settings |
 | `$XDG_DATA_HOME/kennel/` (default `~/.local/share/kennel`) | `sessions.tsv`, `favorites`, `hidden` (entry ids hidden from Home), `boot`, `journal`, `battery.tsv`, `term_history` |
 | `$XDG_CACHE_HOME/kennel/art/` (default `~/.cache/kennel`) | QOI thumbnails and backdrops, keyed by path, size and mtime |
+| `$XDG_CACHE_HOME/kennel/titles.tsv` | e-book titles and authors, keyed by path, size and mtime; rewritten on catalog load with the books found |
 | `$XDG_CACHE_HOME/kennel/wallpaper.qoi`, `wallpaper.key` | wallpaper scaled to the screen, keyed by path, size and mtime |
 | `kennel-backup/` on the external card, else in HOME | backup: `config/` and `data/` copies of the two directories above, `backup.ini` (version, time, boot, uptime, session count) |
 | `$XDG_RUNTIME_DIR/kennel/`, else `/dev/shm/kennel-UID`, else `/tmp/kennel-UID` | `state` (row and entry, open file browser), `kennel.log`, `kennel-read.log`, `kennel-term.log` |
@@ -215,7 +216,7 @@ Read as Puppy does: the files in the platform's `sources`, in order (globs sorte
 | `COLOR` | both | `#rrggbb` accent of generated cards and the category |
 | `HIDDEN` | both | not shown on Home |
 
-Images close to 3:2 and at least half the card size cover the card; portrait images (aspect below 0.85: book covers, portrait box art) get a poster card with the image at the left, the title beside it and the blurred image as background; smaller images are shown as an icon on a stock card. Archive files without their own image whose extension is `epub`, `fb2`, `mobi`, `azw`, `azw3` or `prc` show their embedded cover (EPUB cover-image, meta cover, guide or cover page; FB2 coverpage; MOBI EXTH 201), extracted on the art worker thread and cached in `~/.cache/kennel/art`. ROM titles drop trailing `(...)` and `[...]` groups, which are shown as tags.
+Images close to 3:2 and at least half the card size cover the card; portrait images (aspect below 0.85: book covers, portrait box art) get a poster card with the image at the left, the title beside it and the blurred image as background; smaller images are shown as an icon on a stock card. Archive files without their own image whose extension is `epub`, `fb2`, `mobi`, `azw`, `azw3` or `prc` show their embedded cover (EPUB cover-image, meta cover, guide or cover page; FB2 coverpage; MOBI EXTH 201), extracted on the art worker thread and cached in `~/.cache/kennel/art`. ROM titles drop trailing `(...)` and `[...]` groups, which are shown as tags. Archive files with these extensions use the title stored in the book (EPUB `dc:title`, FB2 `book-title`, MOBI full name or EXTH 503), with the author (EPUB `dc:creator`, FB2 first `author`, MOBI EXTH 100) as the first tag; books without a title keep the file name.
 
 ## Statistics
 
