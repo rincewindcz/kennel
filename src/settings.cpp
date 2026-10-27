@@ -42,6 +42,7 @@ void Settings::load(const std::string& file) {
     accent = std::clamp(atoi(s->get("accent", "0").c_str()), 0, kAccentCount);
     parseColor(s->get("accent_custom"), customAccent);
     lowBattery = std::clamp(atoi(s->get("low_battery", std::to_string(lowBattery)).c_str()), 0, 50);
+    screenOffAfter = std::clamp(atoi(s->get("screen_off_after", std::to_string(screenOffAfter)).c_str()), 0, 86400);
     flag("report_errors", reportErrors);
     flag("show_continue", showContinue);
     flag("show_favorites", showFavorites);
@@ -80,6 +81,7 @@ bool Settings::save() const {
     out += strprintf("animations=%s\n", animNames[(int)animations]);
     out += strprintf("sort=%s\n", sortNames[(int)sort]);
     out += strprintf("low_battery=%d\n", lowBattery);
+    out += strprintf("screen_off_after=%d\n", screenOffAfter);
     out += strprintf("report_errors=%d\n", reportErrors);
     out += strprintf("show_continue=%d\n", showContinue);
     out += strprintf("show_favorites=%d\n", showFavorites);

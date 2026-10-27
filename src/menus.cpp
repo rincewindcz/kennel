@@ -320,6 +320,17 @@ void App::openSettings() {
                                       settings.lowBattery = values[i];
                                       save();
                                   }));
+        if (sys.hasBacklight())
+            m.push_back(items::choice("monitor-off", "Screen off after", {"Never", "1 min", "2 min", "5 min", "10 min", "30 min"},
+                                      [] {
+                                          int v = settings.screenOffAfter;
+                                          return v == 0 ? 0 : v <= 60 ? 1 : v <= 120 ? 2 : v <= 300 ? 3 : v <= 600 ? 4 : 5;
+                                      },
+                                      [](int i) {
+                                          const int values[] = {0, 60, 120, 300, 600, 1800};
+                                          settings.screenOffAfter = values[i];
+                                          save();
+                                      }));
         m.push_back(items::toggle("triangle-alert", "Report app errors", [] { return settings.reportErrors; }, [](bool v) {
             settings.reportErrors = v;
             save();

@@ -141,6 +141,7 @@ private:
     bool running_ = true;
     int exitCode_ = 0;
     double nextPoll_ = 0;
+    double lastInput_ = 0;
     int warnedBattery_ = 101;
     std::vector<std::string> script_;
     double scriptAt_ = 0;

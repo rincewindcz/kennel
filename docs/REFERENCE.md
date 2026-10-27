@@ -18,6 +18,7 @@ Design and implementation notes: [DESIGN.md](DESIGN.md).
 | Art | `ART`, per-ROM images in `ART_DIRECTORIES` and `ENTRY_ICONS_DIRECTORIES`, `ICON`; without an image a stock card (category image or colour, title); decoded on a worker thread, cached as QOI |
 | Top bar | icon and value for the clock (or uptime when the clock is not set), CPU load, free memory, volume and output, battery with charging state, TF card, USB link; Settings > Top bar selects the indicators |
 | Bottom bar | button hints; dock (SELECT) with Settings, Expert and Terminal (expert mode), Files, Statistics, Screen off, Eject card, Restart, Power off; destructive actions ask first |
+| Screen off after | Settings > Screen off after turns the backlight off after 1 to 30 minutes without a button press; the next press wakes it and is swallowed |
 | Quick settings | START: battery level with estimated time left, brightness, volume, mute, speaker or headphones, shortcuts |
 | Files | file browser: open, copy, cut, paste, rename, delete, new folder, info, hidden files; files open with their library entry, an archive's command, the reader, the text viewer or the image viewer; expert mode: terminal in the folder, run scripts |
 | Details | X: statistics of the entry, Play, Favorite, Hide from Home, Start at boot, last app log, reset statistics; expert: run in terminal, entry internals |

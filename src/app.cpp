@@ -393,6 +393,7 @@ void App::dockInput(const KeyEvent& ev) {
 void App::dispatch(const KeyEvent& ev) {
     static const bool debug = getenv("KENNEL_DEBUG_INPUT") != nullptr;
     if (debug) logf("key %d%s", (int)ev.key, ev.repeat ? " repeat" : "");
+    lastInput_ = anim::now();
     if (sys.wake()) {
         input.releaseAll();
         return;
@@ -696,6 +697,7 @@ int App::run(int argcIn, char** argvIn) {
 
     if (const char* script = getenv("KENNEL_AUTOMATE")) script_ = split(script, ',');
 
+    lastInput_ = anim::now();
     std::vector<KeyEvent> keys;
     bool needFrame = true, gamepadStarted = false;
     while (running_) {
@@ -727,6 +729,9 @@ int App::run(int argcIn, char** argvIn) {
             if (sys.poll()) dirty = true;
             batteryLog.sample(sys.battery);
             checkBattery();
+            if (settings.screenOffAfter > 0 && !launch_.active && !sys.screenIsOff() &&
+                now - lastInput_ >= settings.screenOffAfter)
+                screenOff();
             if (settings.time != Settings::TimeMode::Off) dirty = true;
         }
         if (launch_.active && launch_.started && now - launch_.since > kLaunchTimeout) {

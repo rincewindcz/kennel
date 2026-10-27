@@ -19,6 +19,7 @@ struct Settings {
     Animations animations = Animations::Normal;
     Sort sort = Sort::Name;
     int lowBattery = 15;
+    int screenOffAfter = 0;  // seconds without input, 0: never
     bool reportErrors = true;
     bool showContinue = true;
     bool showFavorites = true;
