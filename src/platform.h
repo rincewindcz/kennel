@@ -42,6 +42,8 @@ struct Platform {
     std::string usbMode, usbModeSet;  // usbModeSet: %m is the quoted mode value
     std::vector<UsbMode> usbModes;
     std::string usbNetwork;  // network interface of the USB gadget
+
+    std::vector<std::string> contributors;  // of the system, listed from About
     bool hasUsbModes() const { return !usbMode.empty() && !usbModeSet.empty() && !usbModes.empty(); }
     const UsbMode* findUsbMode(const std::string& value) const;
 

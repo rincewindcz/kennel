@@ -259,6 +259,7 @@ Battery history: kennel appends a sample to `battery.tsv` every minute and when 
 | `hud_env` | environment assignment for "Gallium HUD on next launch" |
 | `launcher_script`, `previous_launcher` | launcher selection in Settings |
 | `usb_mode`, `usb_mode_set`, `usb_modes` | USB mode in Settings and quick settings: `usb_mode` prints the current mode (run at start, when a host connects and when the setting opens without a known mode), `usb_mode_set` switches (`%m` the quoted mode), `usb_modes` lists `label:mode[:icon]` entries, `;`-separated; any of them empty hides the setting. The top bar shows the icon of the current mode, or the `usb` icon with the label when the entry has none |
+| `contributors` | `;`-separated names listed from Settings > About > Platform |
 | `usb_network` | network interface of the USB gadget (goodluckOS `usb0`); while its carrier is up and its received packet count has not grown since the host connected, the USB indicator is dim. The gadget reports carrier on enumeration, the packet count shows the host actually uses the link |
 | `kernel_log` | command printing the kernel log |
 | `mounts` | file systems shown in the status page |

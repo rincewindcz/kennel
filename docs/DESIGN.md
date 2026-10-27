@@ -215,7 +215,7 @@ Panel from the right over dimmed Home: battery (level, estimated time left or un
 
 Changes are written 2 s after the last one (a slider sweep is one write to the card), and before a launch, power off, restart, backup, restore and exit.
 
-Settings also offers Backup (section 17), Rescan library, About (version, platform, renderer, gamepad, start-up and library load times, paths, licenses) and, when the profile defines `launcher_script` and `previous_launcher`, Launcher at boot (rewrites the launcher script).
+Settings also offers Backup (section 17), Rescan library, About (version, platform, renderer, gamepad, start-up and library load times, paths, licenses; the kennel and platform rows open their contributors, from `assets/CONTRIBUTORS` (one name per line) and the profile's `contributors`) and, when the profile defines `launcher_script` and `previous_launcher`, Launcher at boot (rewrites the launcher script).
 
 ## 10. Expert mode
 

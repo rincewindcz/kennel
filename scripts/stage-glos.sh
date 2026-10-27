@@ -32,6 +32,7 @@ done
 cp -r "$repo/assets/term" "$dest/assets/"
 cp -r "$repo/assets/icons/20" "$repo/assets/icons/32" "$dest/assets/icons/"
 cp "$repo/assets/icons/LICENSE-lucide.txt" "$dest/assets/icons/"
+cp "$repo/assets/CONTRIBUTORS" "$dest/assets/"
 cp "$repo/platforms/goodluckos.ini" "$dest/platforms/"
 mkdir -p "$stage/.local/share/applications" "$stage/books"
 cp "$repo/platforms/goodluckos/"{books,terminal,kennel}.puppy "$stage/.local/share/applications/"

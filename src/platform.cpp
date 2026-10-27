@@ -56,6 +56,7 @@ void Platform::load(const std::string& path) {
             }
         }
         str("usb_network", usbNetwork);
+        list("contributors", contributors);
         str("kernel_log", kernelLog);
         list("mounts", mounts);
         width = atoi(p->get("width", std::to_string(width)).c_str());

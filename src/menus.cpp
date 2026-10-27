@@ -48,6 +48,23 @@ std::vector<std::string> categoryOrder() {
     return out;
 }
 
+// About row of a project; with contributors it opens their list.
+MenuItem projectItem(const char* icon, const std::string& label, const std::string& value, const std::string& project,
+                     std::vector<std::string> names) {
+    if (names.empty()) return items::info(icon, label, [value] { return value; });
+    MenuItem item = items::link(icon, label, [project, names] {
+        auto page = std::make_unique<MenuScreen>("Contributors", "users", [names] {
+            std::vector<MenuItem> out;
+            for (const auto& n : names) out.push_back(items::info("user", n, [] { return std::string(); }));
+            return out;
+        });
+        page->subtitle = project;
+        app.push(std::move(page));
+    });
+    item.value = [value] { return value; };
+    return item;
+}
+
 bool launcherIsKennel() {
     std::string script = readFile(paths.expand(platform.launcherScript)).value_or("");
     return script.find(paths.exe) != std::string::npos;
@@ -316,8 +333,12 @@ void App::openSettings() {
         m.push_back(items::link("info", "About", [] {
             app.push(std::make_unique<MenuScreen>("About", "info", [] {
                 std::vector<MenuItem> a;
-                a.push_back(items::info("gamepad-2", "kennel", [] { return std::string(KENNEL_VERSION); }));
-                a.push_back(items::info("cpu", "Platform", [] { return platform.name + " (" + platform.id + ")"; }));
+                std::vector<std::string> kennelNames;
+                for (const auto& line : split(readFile(paths.asset("CONTRIBUTORS")).value_or(""), '\n'))
+                    if (!trim(line).empty()) kennelNames.push_back(trim(line));
+                a.push_back(projectItem("gamepad-2", "kennel", KENNEL_VERSION, "kennel", kennelNames));
+                a.push_back(projectItem("cpu", "Platform", platform.name + " (" + platform.id + ")", platform.name,
+                                        platform.contributors));
                 a.push_back(items::info("monitor-off", "Renderer", [] {
                     return strprintf("%s, %.0fx%.0f, %.0f Hz", gfx.rendererName.c_str(), gfx.W, gfx.H, gfx.refresh);
                 }));
