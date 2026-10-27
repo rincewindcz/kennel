@@ -51,10 +51,11 @@ void Platform::load(const std::string& path) {
         if (const IniEntry* e = p->find("usb_modes")) {
             usbModes.clear();
             for (const auto& m : split(e->value, ';')) {
-                size_t colon = m.find(':');
-                if (colon != std::string::npos) usbModes.emplace_back(m.substr(0, colon), m.substr(colon + 1));
+                auto f = split(m, ':');
+                if (f.size() >= 2) usbModes.push_back({f[0], f[1], f.size() >= 3 ? f[2] : ""});
             }
         }
+        str("usb_network", usbNetwork);
         str("kernel_log", kernelLog);
         list("mounts", mounts);
         width = atoi(p->get("width", std::to_string(width)).c_str());
@@ -71,6 +72,12 @@ void Platform::load(const std::string& path) {
     }
     if (const IniSection* s = ini.find("status"))
         for (const auto& e : s->entries) statusCommands.emplace_back(e.key, e.value);
+}
+
+const Platform::UsbMode* Platform::findUsbMode(const std::string& value) const {
+    for (const auto& m : usbModes)
+        if (m.value == value) return &m;
+    return nullptr;
 }
 
 Platform detectPlatform() {

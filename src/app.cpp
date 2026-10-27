@@ -25,6 +25,9 @@ constexpr float kTopBar = 32, kBottomBar = 36;
 constexpr double kPollInterval = 1.0;
 constexpr double kDarkStateInterval = 5.0;  // device state poll while the screen is off
 constexpr double kLaunchTimeout = 8.0;
+constexpr double kSettingsDelay = 2.0;
+constexpr double kDimLead = 10.0;       // backlight at level 1 this long before auto screen off
+constexpr double kCriticalDelay = 30.0;  // between the critical battery warning and the power off
 constexpr int kInputPollMs = 10, kInputPollOffMs = 100;  // waitEvent() interval, screen on and off
 
 // Top bar time: Auto is the wall clock once it is set, the uptime before. Both show minutes.
@@ -122,10 +125,20 @@ void App::finishJobs() {
 }
 
 void App::powerOff() {
-    confirm("power", "Power off?", "The device shuts down.", "Power off", [this] {
-        saveState();
-        toast("Powering off", "power");
-        runSystem(platform.poweroff, "Power off failed");
+    confirm("power", "Power off?", "The device shuts down.", "Power off", [this] { powerOffNow("Powering off"); });
+}
+
+void App::powerOffNow(const std::string& reason) {
+    logf("power off: %s", reason.c_str());
+    saveState();
+    toast(reason, "power");
+    runSystem(platform.poweroff, "Power off failed");
+}
+
+void App::queryUsbMode() {
+    if (platform.usbMode.empty()) return;
+    runAsync(platform.usbMode, [](int status, const std::string& out) {
+        if (status == 0) sys.usbMode = trim(out);
     });
 }
 
@@ -141,6 +154,25 @@ void App::screenOff() {
     sys.screenOff();
     input.releaseAll();
     setDark(sys.screenIsOff());
+}
+
+// Others switch the backlight too (the power button script). Auto screen off counts only time with
+// the screen on and dims the screen first; auto power off counts from the last press.
+void App::checkIdle(double now, int level) {
+    if ((sys.screenIsOff() && level > 0) || (sys.screenDimmed() && level > 1)) sys.wake();
+    if (level == 0) lastInput_ = now;
+    if (launch_.active) return;
+    double idle = now - lastInput_, off = settings.screenOffAfter;
+    if (off > 0 && !sys.screenIsOff()) {
+        if (idle >= off) screenOff();
+        else if (idle >= off - std::min(kDimLead, off / 2) && !sys.screenDimmed()) sys.dimScreen();
+    }
+    const Battery& b = sys.battery;
+    if (settings.powerOffAfter > 0 && !platform.poweroff.empty() && !b.charging() && !b.externalPower &&
+        now - lastPress_ >= settings.powerOffAfter) {
+        lastPress_ = now;  // a failed power off is retried after another full period
+        powerOffNow("No input: powering off");
+    }
 }
 
 // Nothing is drawn while the backlight is off; the first frame after it comes back is fresh.
@@ -306,7 +338,18 @@ void App::setAutolaunch(const Entry* e) {
         toast("Could not write " + path, "triangle-alert", theme::bad);
 }
 
+void App::saveSettings() {
+    settingsAt_ = anim::now() + kSettingsDelay;
+}
+
+void App::flushSettings() {
+    if (settingsAt_ <= 0) return;
+    settingsAt_ = 0;
+    if (!settings.save()) toast("Could not save settings", "triangle-alert", theme::bad);
+}
+
 void App::saveState() {
+    flushSettings();
     if (!home) return;
     std::string state = home->stateString();
     for (const auto& s : stack_)
@@ -352,7 +395,23 @@ void App::reportLastSession() {
 
 void App::checkBattery() {
     const Battery& b = sys.battery;
-    if (b.capacity < 0 || settings.lowBattery == 0) return;
+    if (b.capacity < 0) return;
+    bool critical = settings.criticalBattery > 0 && !platform.poweroff.empty() && !b.charging() && !b.externalPower &&
+                    b.capacity <= settings.criticalBattery;
+    // The warning comes first; a charger plugged in before the deadline cancels the power off.
+    if (critical && criticalAt_ <= 0) {
+        criticalAt_ = anim::now() + kCriticalDelay;
+        if (sys.wake()) setDark(false);
+        lastInput_ = anim::now();
+        toast(strprintf("Battery at %d%%: powering off in %.0f s", b.capacity, kCriticalDelay), "battery-warning", theme::bad);
+    } else if (!critical && criticalAt_ > 0) {
+        criticalAt_ = 0;
+        toast("Power off cancelled", "battery-charging", theme::good);
+    } else if (critical && anim::now() >= criticalAt_) {
+        criticalAt_ = 0;
+        powerOffNow(strprintf("Battery at %d%%: powering off", b.capacity));
+    }
+    if (settings.lowBattery == 0) return;
     if (b.charging() || b.externalPower) {
         warnedBattery_ = 101;
         return;
@@ -476,7 +535,12 @@ void App::drawTopBar() {
     if (settings.barCpu && sys.cpuPercent >= 0)
         indicator("cpu", strprintf("%d%%", sys.cpuPercent), theme::dim, sys.cpuPercent >= 85 ? theme::warn : theme::text);
     if (settings.barCard && sys.externalMounted) indicator("card", {}, theme::dim, theme::dim);
-    if (settings.barUsb && sys.usbConnected) indicator("usb", {}, theme::dim, theme::dim);
+    if (settings.barUsb && sys.usbConnected) {
+        const Platform::UsbMode* m = platform.findUsbMode(sys.usbMode);
+        bool named = m && !m->icon.empty();
+        Color c = sys.usbNetIdle ? theme::faint : theme::dim;
+        indicator(named ? m->icon.c_str() : "usb", m && !named ? m->label : "", c, c);
+    }
 
     float x = 14;
     double seconds;
@@ -714,7 +778,9 @@ int App::run(int argcIn, char** argvIn) {
 
     if (const char* script = getenv("KENNEL_AUTOMATE")) script_ = split(script, ',');
 
-    lastInput_ = anim::now();
+    lastInput_ = lastPress_ = anim::now();
+    usbWas_ = sys.usbConnected;
+    queryUsbMode();
     std::vector<KeyEvent> keys;
     bool needFrame = true, gamepadStarted = false;
     while (running_) {
@@ -738,11 +804,12 @@ int App::run(int argcIn, char** argvIn) {
         }
         anim::tick();
         now = anim::now();
-        if (pressed) lastInput_ = now;
+        if (pressed) lastInput_ = lastPress_ = now;
         input.tick(keys);
         automate(keys);
         finishJobs();
         for (const auto& k : keys) dispatch(k);
+        if (pressed && sys.screenDimmed()) sys.wake();  // keys kennel doesn't map
         if (pressed || !keys.empty()) setDark(sys.screenIsOff() || sys.backlight() == 0);
 
         if (now >= nextPoll_) {
@@ -751,17 +818,14 @@ int App::run(int argcIn, char** argvIn) {
             if (!dark_ || now >= nextStatePoll_) {
                 nextStatePoll_ = now + kDarkStateInterval;
                 if (sys.poll()) dirty = true;
+                if (sys.usbConnected && !usbWas_) queryUsbMode();
+                usbWas_ = sys.usbConnected;
                 batteryLog.sample(sys.battery);
                 checkBattery();
             }
-            // Others switch the backlight too (the power button script). Auto screen off counts only
-            // time with the screen on.
+            if (late) lastInput_ = lastPress_ = now;
             int level = sys.backlight();
-            if (sys.screenIsOff() && level > 0) sys.wake();
-            if (late || level == 0) lastInput_ = now;
-            if (settings.screenOffAfter > 0 && !launch_.active && !sys.screenIsOff() &&
-                now - lastInput_ >= settings.screenOffAfter)
-                screenOff();
+            checkIdle(now, level);
             setDark(sys.screenIsOff() || level == 0);
             double seconds;
             long minute = shownTime(seconds) == Settings::TimeMode::Off ? -1 : (long)(seconds / 60);
@@ -771,6 +835,7 @@ int App::run(int argcIn, char** argvIn) {
             }
             if (std::any_of(stack_.begin(), stack_.end(), [](const auto& s) { return s->live(); })) dirty = true;
         }
+        if (settingsAt_ > 0 && now >= settingsAt_) flushSettings();  // the loop wakes at least every poll
         if (launch_.active && launch_.started && now - launch_.since > kLaunchTimeout) {
             launch_.active = false;
             toast("The app did not start", "triangle-alert", theme::bad);

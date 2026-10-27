@@ -26,6 +26,8 @@ public:
     std::string batteryDir() const { return batteryDir_; }
     bool externalMounted = false;
     bool usbConnected = false;
+    bool usbNetIdle = false;  // the gadget network link is up, but nothing came from the host since it connected
+    std::string usbMode;      // value printed by platform usb_mode, empty while unknown
     int cpuPercent = -1;  // busy share of all cores since the previous poll
     uint64_t memAvailable = 0, memTotal = 0;
 
@@ -34,9 +36,11 @@ public:
     int brightness() const;  // raw level
     int backlight() const;   // raw level as set now (0 while off), -1 without a backlight
     void setBrightness(int level);
+    void dimScreen();  // backlight to level 1 until wake()
     void screenOff();
-    bool wake();  // true if the screen was off
-    bool screenIsOff() const { return savedBrightness_ >= 0; }
+    bool wake();  // true if the screen was off or dimmed
+    bool screenIsOff() const { return savedBrightness_ >= 0 && !dimmed_; }
+    bool screenDimmed() const { return dimmed_; }
 
     bool hasVolume() const;
     int volume();
@@ -56,6 +60,9 @@ private:
     unsigned long long cpuBusy_ = 0, cpuTotal_ = 0;
     long maxBrightness_ = 0;
     long savedBrightness_ = -1;
+    bool dimmed_ = false;
+    bool polled_ = false;
+    long usbRxBase_ = 0;  // host packets received before the current connection
     std::string batteryDir_;
     std::string chargerDirs_[4];
 };

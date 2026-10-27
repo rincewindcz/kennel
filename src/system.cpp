@@ -153,14 +153,28 @@ bool System::poll() {
         std::string mounts = readFile("/proc/mounts").value_or("");
         externalMounted = mounts.find(" " + platform.externalMount + " ") != std::string::npos;
     }
+    bool wasConnected = usbConnected;
     usbConnected = false;
     for (const auto& udc : glob("/sys/class/udc/*"))
         if (readLine(udc + "/state") == "configured") usbConnected = true;
+    // The gadget reports carrier as soon as the host enumerates it, so the link counts as used once
+    // the host sends a packet. Packets from before kennel started count, kennel restarts after every app.
+    usbNetIdle = false;
+    if (!platform.usbNetwork.empty()) {
+        std::string net = "/sys/class/net/" + platform.usbNetwork;
+        long rx = 0;
+        if (readLong(net + "/statistics/rx_packets", rx)) {
+            if (polled_ && usbConnected && !wasConnected) usbRxBase_ = rx;
+            usbNetIdle = usbConnected && readLine(net + "/carrier") == "1" && rx <= usbRxBase_;
+        }
+    }
+    polled_ = true;
 #ifdef KENNEL_ALSA
     refreshMixer();
 #endif
-    std::string sig = strprintf("%d|%s|%d|%d|%d|%d|%d|%d|%llu", battery.capacity, battery.status.c_str(), battery.externalPower,
-                                externalMounted, usbConnected, hasVolume() ? volume() : -1, hasOutputSwitch() ? speaker() : -1,
+    std::string sig = strprintf("%d|%s|%d|%d|%d|%d|%d|%d|%d|%llu", battery.capacity, battery.status.c_str(), battery.externalPower,
+                                externalMounted, usbConnected, usbNetIdle, hasVolume() ? volume() : -1,
+                                hasOutputSwitch() ? speaker() : -1,
                                 settings.barCpu ? cpuPercent : -1,
                                 settings.barMemory ? (unsigned long long)(memAvailable >> 20) : 0ull);
     if (hasMute()) sig += muted() ? "|m" : "|u";
@@ -186,8 +200,22 @@ void System::setBrightness(int level) {
     writeFile(platform.backlight + "/brightness", std::to_string(std::clamp<long>(level, 1, maxBrightness_)));
 }
 
+void System::dimScreen() {
+    if (!hasBacklight() || savedBrightness_ >= 0) return;
+    long cur = 0;
+    if (!readLong(platform.backlight + "/brightness", cur) || cur <= 1) return;
+    savedBrightness_ = cur;
+    dimmed_ = true;
+    writeFile(platform.backlight + "/brightness", "1");
+}
+
 void System::screenOff() {
     if (!hasBacklight() || screenIsOff()) return;
+    if (dimmed_) {
+        dimmed_ = false;
+        writeFile(platform.backlight + "/brightness", "0");
+        return;
+    }
     long cur = 0;
     if (!readLong(platform.backlight + "/brightness", cur) || cur <= 0) return;
     savedBrightness_ = cur;
@@ -195,14 +223,19 @@ void System::screenOff() {
 }
 
 bool System::wake() {
-    if (!screenIsOff()) return false;
+    if (savedBrightness_ < 0) return false;
     long cur = 0;
-    if (readLong(platform.backlight + "/brightness", cur) && cur > 0) {  // turned on by someone else
-        savedBrightness_ = -1;
-        return false;
+    if (readLong(platform.backlight + "/brightness", cur)) {
+        if (dimmed_ && cur == 0) return false;  // switched off by someone else while dimmed: restored when it comes back
+        if (cur != (dimmed_ ? 1 : 0)) {  // changed by someone else
+            savedBrightness_ = -1;
+            dimmed_ = false;
+            return false;
+        }
     }
     writeFile(platform.backlight + "/brightness", std::to_string(savedBrightness_));
     savedBrightness_ = -1;
+    dimmed_ = false;
     return true;
 }
 

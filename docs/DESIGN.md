@@ -188,7 +188,7 @@ List tabs: up/down (wrapping on a fresh press), L2/R2 page, A opens Details of e
 
 ## 8. Quick settings (START)
 
-Panel from the right over dimmed Home: battery (level, estimated time left or until full), brightness (backlight levels 1 to max, sysfs, writable by group `video` on goodluckOS, persisted by `S90backlight`), volume, mute, output Speaker/Headphones, then Files, Statistics, Settings, Expert and Terminal (expert mode), Screen off. The same side panel (`MenuPanel`) lists the file browser's actions.
+Panel from the right over dimmed Home: battery (level, estimated time left or until full), brightness (backlight levels 1 to max, sysfs, writable by group `video` on goodluckOS, persisted by `S90backlight`), volume, mute, output Speaker/Headphones, USB mode (as in Settings), then Files, Statistics, Settings, Expert and Terminal (expert mode), Screen off. The same side panel (`MenuPanel`) lists the file browser's actions.
 
 ## 9. Settings
 
@@ -206,10 +206,14 @@ Panel from the right over dimmed Home: battery (level, estimated time left or un
 | Categories | `hidden`, `order` | `;`-separated names |
 | Confirm button | `swap_confirm` | 0 south, 1 east |
 | Low battery warning | `low_battery` | 0, 10, 15, 20, 30 (toast at the level and at 5 %) |
-| Screen off after | `screen_off_after` | seconds without a button press (any key or gamepad button, also volume and power keys kennel doesn't use) until the backlight goes to 0 (as the dock's Screen off), 0 never (default); the menu offers Never, 1, 2, 5, 10, 30 min and is shown only with a backlight. Only time with the screen on counts: the timer restarts while another program (goodluckOS `toggle-screen.sh` on the power button) holds the backlight at 0, and after kennel was stopped (a poll more than 2 s late). A screen kennel turned off and another program turned on again counts as on |
+| Power off on low battery | `critical_battery` | percent, 0 off (default); the menu offers Off, 3, 5, 8 %. At the level without a charger: the screen comes on, a toast warns, and 30 s later kennel saves its state and runs `poweroff` unless a charger was connected meanwhile. Shown when the profile has `poweroff` |
+| Power off after | `power_off_after` | seconds without a button press, 0 never (default); the menu offers Never, 10, 15, 30 min, 1, 2 hours. Counts with the screen on and off, restarts after kennel was stopped (sleep); not on a charger. Shown when the profile has `poweroff` |
+| Screen off after | `screen_off_after` | seconds without a button press (any key or gamepad button, also volume and power keys kennel doesn't use) until the backlight goes to 0 (as the dock's Screen off), 0 never (default); for the last 10 s (half the time below 20 s) the backlight is at level 1 and a press restores it and is swallowed; the menu offers Never, 1, 2, 5, 10, 30 min and is shown only with a backlight. Only time with the screen on counts: the timer restarts while another program (goodluckOS `toggle-screen.sh` on the power button) holds the backlight at 0, and after kennel was stopped (a poll more than 2 s late). A screen kennel turned off and another program turned on again counts as on |
 | Report app errors | `report_errors` | 0, 1 |
 | Expert mode | `expert` | 0, 1 |
 | Performance overlay (Expert page) | `perf_overlay` | 0, 1 |
+
+Changes are written 2 s after the last one (a slider sweep is one write to the card), and before a launch, power off, restart, backup, restore and exit.
 
 Settings also offers Backup (section 17), Rescan library, About (version, platform, renderer, gamepad, start-up and library load times, paths, licenses) and, when the profile defines `launcher_script` and `previous_launcher`, Launcher at boot (rewrites the launcher script).
 

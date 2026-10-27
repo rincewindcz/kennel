@@ -36,8 +36,14 @@ struct Platform {
     std::string launcherScript;
     std::string previousLauncher;
 
+    struct UsbMode {
+        std::string label, value, icon;  // icon: top bar icon, empty shows the usb icon and the label
+    };
     std::string usbMode, usbModeSet;  // usbModeSet: %m is the quoted mode value
-    std::vector<std::pair<std::string, std::string>> usbModes;  // label, value
+    std::vector<UsbMode> usbModes;
+    std::string usbNetwork;  // network interface of the USB gadget
+    bool hasUsbModes() const { return !usbMode.empty() && !usbModeSet.empty() && !usbModes.empty(); }
+    const UsbMode* findUsbMode(const std::string& value) const;
 
     int width = 640, height = 480;
     bool fullscreen = true;

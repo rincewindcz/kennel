@@ -6,6 +6,7 @@
 #include "art.h"
 #include "backup.h"
 #include "home.h"
+#include "panels.h"
 #include "paths.h"
 #include "platform.h"
 #include "settings.h"
@@ -17,7 +18,21 @@ namespace {
 
 void save() {
     anim::setScale(settings.animScale());
-    if (!settings.save()) app.toast("Could not save settings", "triangle-alert", theme::bad);
+    app.saveSettings();
+}
+
+// Choice over preset values of an int setting; a value between presets shows the next larger one.
+MenuItem presetChoice(const char* icon, const char* label, std::vector<std::string> labels, std::vector<int> values, int* value) {
+    return items::choice(icon, label, std::move(labels),
+                         [values, value] {
+                             for (size_t i = 0; i < values.size(); ++i)
+                                 if (*value <= values[i]) return (int)i;
+                             return (int)values.size() - 1;
+                         },
+                         [values, value](int i) {
+                             *value = values[i];
+                             save();
+                         });
 }
 
 std::vector<std::string> categoryOrder() {
@@ -36,44 +51,6 @@ std::vector<std::string> categoryOrder() {
 bool launcherIsKennel() {
     std::string script = readFile(paths.expand(platform.launcherScript)).value_or("");
     return script.find(paths.exe) != std::string::npos;
-}
-
-// Index into platform.usbModes of the mode usb_mode prints; 0 when unknown.
-int usbModeIndex() {
-    std::string cur = trim(runCapture(platform.usbMode));
-    for (size_t i = 0; i < platform.usbModes.size(); ++i)
-        if (platform.usbModes[i].second == cur) return (int)i;
-    return 0;
-}
-
-// The switch runs in the background (the USB gadget restarts for a second or two); the row
-// shows the new mode at once and ignores input until the switch is done.
-MenuItem usbModeItem() {
-    struct State {
-        int current = 0, switching = -1;
-    };
-    std::vector<std::string> labels;
-    for (const auto& m : platform.usbModes) labels.push_back(m.first);
-    auto state = std::make_shared<State>();
-    state->current = usbModeIndex();
-    return items::choice("usb", "USB mode", labels,
-                         [state] { return state->switching >= 0 ? state->switching : state->current; },
-                         [state](int i) {
-                             if (state->switching >= 0) return;
-                             state->switching = i;
-                             const auto& [label, value] = platform.usbModes[i];
-                             app.runAsync(replaceAll(platform.usbModeSet, "%m", shellQuote(value)),
-                                          [state, i, label](int status, const std::string& out) {
-                                              state->switching = -1;
-                                              if (status == 0) {
-                                                  state->current = i;
-                                                  app.toast("USB mode: " + label, "usb", theme::good);
-                                              } else {
-                                                  app.toast("USB mode change failed: " + trim(out), "triangle-alert",
-                                                            theme::bad);
-                                              }
-                                          });
-                         });
 }
 
 void setLauncher(bool kennel) {
@@ -172,6 +149,7 @@ void openBackup() {
         }));
         m.push_back(items::action("copy", "Back up now", [dir] {
             std::string error;
+            app.flushSettings();
             if (makeBackup(dir, error)) {
                 app.toast("Backed up to " + dir, "check", theme::good);
                 if (auto* page = dynamic_cast<MenuScreen*>(app.top())) page->requestRebuild();
@@ -184,6 +162,7 @@ void openBackup() {
                             "replaced by the backup from " + describeBackup(dir) + ". kennel restarts.",
                             "Restore", [dir] {
                                 std::string error;
+                                app.flushSettings();  // else restart() writes them over the restored file
                                 if (restoreBackup(dir, error)) app.restart();
                                 else app.toast("Restore failed: " + error, "triangle-alert", theme::bad);
                             });
@@ -310,33 +289,22 @@ void App::openSettings() {
                                   }));
 
         m.push_back(items::header("SYSTEM"));
-        m.push_back(items::choice("battery-warning", "Low battery warning", {"Off", "10 %", "15 %", "20 %", "30 %"},
-                                  [] {
-                                      int v = settings.lowBattery;
-                                      return v == 0 ? 0 : v <= 10 ? 1 : v <= 15 ? 2 : v <= 20 ? 3 : 4;
-                                  },
-                                  [](int i) {
-                                      const int values[] = {0, 10, 15, 20, 30};
-                                      settings.lowBattery = values[i];
-                                      save();
-                                  }));
+        m.push_back(presetChoice("battery-warning", "Low battery warning", {"Off", "10 %", "15 %", "20 %", "30 %"},
+                                 {0, 10, 15, 20, 30}, &settings.lowBattery));
+        if (!platform.poweroff.empty()) {
+            m.push_back(presetChoice("battery", "Power off on low battery", {"Off", "3 %", "5 %", "8 %"}, {0, 3, 5, 8},
+                                     &settings.criticalBattery));
+            m.push_back(presetChoice("power", "Power off after", {"Never", "10 min", "15 min", "30 min", "1 hour", "2 hours"},
+                                     {0, 600, 900, 1800, 3600, 7200}, &settings.powerOffAfter));
+        }
         if (sys.hasBacklight())
-            m.push_back(items::choice("monitor-off", "Screen off after", {"Never", "1 min", "2 min", "5 min", "10 min", "30 min"},
-                                      [] {
-                                          int v = settings.screenOffAfter;
-                                          return v == 0 ? 0 : v <= 60 ? 1 : v <= 120 ? 2 : v <= 300 ? 3 : v <= 600 ? 4 : 5;
-                                      },
-                                      [](int i) {
-                                          const int values[] = {0, 60, 120, 300, 600, 1800};
-                                          settings.screenOffAfter = values[i];
-                                          save();
-                                      }));
+            m.push_back(presetChoice("monitor-off", "Screen off after", {"Never", "1 min", "2 min", "5 min", "10 min", "30 min"},
+                                     {0, 60, 120, 300, 600, 1800}, &settings.screenOffAfter));
         m.push_back(items::toggle("triangle-alert", "Report app errors", [] { return settings.reportErrors; }, [](bool v) {
             settings.reportErrors = v;
             save();
         }));
-        if (!platform.usbModeSet.empty() && !platform.usbMode.empty() && !platform.usbModes.empty())
-            m.push_back(usbModeItem());
+        if (platform.hasUsbModes()) m.push_back(usbModeItem());
         m.push_back(items::link("hard-drive", "Backup", [] { openBackup(); }));
         m.push_back(items::toggle("terminal", "Expert mode", [] { return settings.expert; }, [](bool v) {
             settings.expert = v;

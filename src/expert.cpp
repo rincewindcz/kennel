@@ -553,7 +553,7 @@ void App::openExpert() {
         m.push_back(items::link("folder", "Files", [] { app.openFiles("/"); }));
         m.push_back(items::toggle("gauge", "Performance overlay", [] { return settings.perfOverlay; }, [](bool v) {
             settings.perfOverlay = v;
-            settings.save();
+            app.saveSettings();
         }));
         if (!platform.hudEnv.empty())
             m.push_back(items::toggle("zap", "HUD for next launch", [] { return settings.hudNextLaunch; },

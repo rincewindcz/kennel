@@ -77,6 +77,9 @@ public:
     void setWallpaper(const std::string& path);
     std::string wrapCommand(const Entry& e) const;
     void saveState();
+    // Writes kennel.ini a moment after the last change, so a slider sweep is one write.
+    void saveSettings();
+    void flushSettings();
 
     void powerOff();
     void reboot();
@@ -128,6 +131,9 @@ private:
     void drawPerf();
     void startLaunch();
     void checkBattery();
+    void checkIdle(double now, int level);
+    void powerOffNow(const std::string& reason);
+    void queryUsbMode();
     void reportLastSession();
     void automate(std::vector<KeyEvent>& keys);
     void finishJobs();
@@ -144,8 +150,12 @@ private:
     int exitCode_ = 0;
     double nextPoll_ = 0;
     double nextStatePoll_ = 0;  // sys.poll() while the screen is off
-    double lastInput_ = 0;
-    bool dark_ = false;      // backlight off: nothing is drawn
+    double lastInput_ = 0;   // last press, or when the screen came back on: auto screen off
+    double lastPress_ = 0;   // last press or resume from sleep: auto power off
+    double criticalAt_ = 0;  // power off on a critical battery, 0: not pending
+    double settingsAt_ = 0;  // pending kennel.ini write, 0: none
+    bool usbWas_ = false;
+    bool dark_ = false;     // backlight off: nothing is drawn
     long clockMinute_ = -1;  // minute shown by the top bar clock
     int warnedBattery_ = 101;
     std::vector<std::string> script_;

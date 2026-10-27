@@ -16,10 +16,11 @@ Design and implementation notes: [DESIGN.md](DESIGN.md).
 | Appearance | accent colours Blue, Teal, Amber, Rose, Violet, Green, Crimson or a custom RGB colour; background gradient, game art of the selected entry, or a wallpaper (Files: X on an image or in the image viewer, Set as wallpaper); animation speed |
 | Backup | Settings > Backup copies settings and data to `kennel-backup` on the external card (HOME without a card) and restores them |
 | Art | `ART`, per-ROM images in `ART_DIRECTORIES` and `ENTRY_ICONS_DIRECTORIES`, `ICON`; without an image a stock card (category image or colour, title); decoded on a worker thread, cached as QOI |
-| Top bar | icon and value for the clock (or uptime when the clock is not set), CPU load, free memory, volume and output, battery with charging state, TF card, USB link; Settings > Top bar selects the indicators |
+| Top bar | icon and value for the clock (or uptime when the clock is not set), CPU load, free memory, volume and output, battery with charging state, TF card, USB link (the icon of the USB mode, dim in network mode until the PC sent a packet); Settings > Top bar selects the indicators |
 | Bottom bar | button hints; dock (SELECT) with Settings, Expert and Terminal (expert mode), Files, Statistics, Screen off, Eject card, Restart, Power off; destructive actions ask first |
-| Screen off after | Settings > Screen off after turns the backlight off after 1 to 30 minutes without a button press; the next press wakes it and is swallowed |
-| Quick settings | START: battery level with estimated time left, brightness, volume, mute, speaker or headphones, shortcuts |
+| Screen off after | Settings > Screen off after turns the backlight off after 1 to 30 minutes without a button press, dimmed for the last 10 s; the next press wakes it and is swallowed |
+| Power off | Settings > Power off after (10 minutes to 2 hours without a button press, not on a charger) and Power off on low battery (3, 5 or 8 %, 30 s after a warning) |
+| Quick settings | START: battery level with estimated time left, brightness, volume, mute, speaker or headphones, USB mode, shortcuts |
 | Files | file browser: open, copy, cut, paste, rename, delete, new folder, info, hidden files; files open with their library entry, an archive's command, the reader, the text viewer or the image viewer; expert mode: terminal in the folder, run scripts |
 | Details | X: statistics of the entry, Play, Favorite, Hide from Home, Start at boot, last app log, reset statistics; expert: run in terminal, entry internals |
 | Statistics | per entry play time, sessions, last played, last exit code; statistics page with Overview, Most played, Categories, Recent and Battery tabs; error report when an app exits with a failure code |
@@ -257,7 +258,8 @@ Battery history: kennel appends a sample to `battery.tsv` every minute and when 
 | `fallback_fonts` | fonts for glyphs missing in Inter (CJK) |
 | `hud_env` | environment assignment for "Gallium HUD on next launch" |
 | `launcher_script`, `previous_launcher` | launcher selection in Settings |
-| `usb_mode`, `usb_mode_set`, `usb_modes` | USB mode in Settings: `usb_mode` prints the current mode, `usb_mode_set` switches (`%m` the quoted mode), `usb_modes` lists `label:mode` pairs, `;`-separated; any of them empty hides the setting |
+| `usb_mode`, `usb_mode_set`, `usb_modes` | USB mode in Settings and quick settings: `usb_mode` prints the current mode (run at start, when a host connects and when the setting opens without a known mode), `usb_mode_set` switches (`%m` the quoted mode), `usb_modes` lists `label:mode[:icon]` entries, `;`-separated; any of them empty hides the setting. The top bar shows the icon of the current mode, or the `usb` icon with the label when the entry has none |
+| `usb_network` | network interface of the USB gadget (goodluckOS `usb0`); while its carrier is up and its received packet count has not grown since the host connected, the USB indicator is dim. The gadget reports carrier on enumeration, the packet count shows the host actually uses the link |
 | `kernel_log` | command printing the kernel log |
 | `mounts` | file systems shown in the status page |
 | `width`, `height`, `fullscreen` | logical screen size, window mode |

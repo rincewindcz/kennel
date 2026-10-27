@@ -8,6 +8,43 @@
 
 namespace {
 constexpr float kPanelW = 320;
+
+int usbSwitching = -1;  // index of the mode being switched to, -1: none
+
+// Index into platform.usbModes of the current mode; 0 when unknown.
+int usbModeIndex() {
+    if (usbSwitching >= 0) return usbSwitching;
+    for (size_t i = 0; i < platform.usbModes.size(); ++i)
+        if (platform.usbModes[i].value == sys.usbMode) return (int)i;
+    return 0;
+}
+}  // namespace
+
+// The switch runs in the background (the USB gadget restarts for a second or two); the row
+// shows the new mode at once and ignores input until the switch is done.
+MenuItem usbModeItem() {
+    if (sys.usbMode.empty()) {
+        int status = 0;
+        std::string out = runCapture(platform.usbMode, &status);
+        if (status == 0) sys.usbMode = trim(out);
+    }
+    std::vector<std::string> labels;
+    for (const auto& m : platform.usbModes) labels.push_back(m.label);
+    return items::choice("usb", "USB mode", labels, usbModeIndex, [](int i) {
+        if (usbSwitching >= 0) return;
+        usbSwitching = i;
+        app.runAsync(replaceAll(platform.usbModeSet, "%m", shellQuote(platform.usbModes[i].value)),
+                     [i](int status, const std::string& out) {
+                         usbSwitching = -1;
+                         const Platform::UsbMode& m = platform.usbModes[i];
+                         if (status == 0) {
+                             sys.usbMode = m.value;
+                             app.toast("USB mode: " + m.label, m.icon.empty() ? "usb" : m.icon, theme::good);
+                         } else {
+                             app.toast("USB mode change failed: " + trim(out), "triangle-alert", theme::bad);
+                         }
+                     });
+    });
 }
 
 MenuPanel::MenuPanel(std::string title, std::vector<MenuItem> items, bool closeOnAction)
@@ -34,6 +71,7 @@ QuickPanel::QuickPanel() : MenuPanel("Quick settings", {}, false) {
     if (sys.hasOutputSwitch())
         m.push_back(items::choice("headphones", "Output", {"Speaker", "Headphones"}, [] { return sys.speaker() ? 0 : 1; },
                                   [](int v) { sys.setSpeaker(v == 0); }));
+    if (platform.hasUsbModes()) m.push_back(usbModeItem());
     m.push_back(items::header("GO TO"));
     m.push_back(items::link("folder", "Files", [] { app.openFiles(); }));
     m.push_back(items::link("chart-column", "Statistics", [] { app.openStatistics(); }));
