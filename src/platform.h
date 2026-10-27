@@ -19,7 +19,6 @@ struct Platform {
     std::string stopApp, killApp;
     std::string poweroff, reboot;
     std::string eject, externalMount;
-    std::string screenOff;
 
     std::string backlight;
     std::string mixerCard = "default";

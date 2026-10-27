@@ -245,7 +245,7 @@ Battery history: kennel appends a sample to `battery.tsv` every minute and when 
 | `launch` | `exec`: kennel releases the display, runs the app, waits and restarts itself; `command`: runs `launch_command` and expects to be stopped (goodluckOS appd) |
 | `launch_command`, `terminal_flag` | `%c` the quoted command, `%t` `terminal_flag` for terminal entries |
 | `stop_app`, `kill_app` | commands that end the running app |
-| `poweroff`, `reboot`, `eject`, `external_mount`, `screen_off` | system actions; empty hides the action |
+| `poweroff`, `reboot`, `eject`, `external_mount` | system actions; empty hides the action |
 | `backlight` | sysfs backlight directory (default: first of `/sys/class/backlight/*`) |
 | `mixer_card`, `mixer_volume`, `mixer_output_switch` | ALSA card, volume control, speaker switch |
 | `sources` | `.puppy` files and globs, `;`-separated, `~` is HOME |

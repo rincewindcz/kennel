@@ -32,7 +32,6 @@ void Platform::load(const std::string& path) {
         str("reboot", reboot);
         str("eject", eject);
         str("external_mount", externalMount);
-        str("screen_off", screenOff);
         str("backlight", backlight);
         str("mixer_card", mixerCard);
         str("mixer_volume", mixerVolume);
