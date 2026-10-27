@@ -32,6 +32,7 @@ public:
     bool hasBacklight() const { return maxBrightness_ > 0; }
     int maxBrightness() const { return (int)maxBrightness_; }
     int brightness() const;  // raw level
+    int backlight() const;   // raw level as set now (0 while off), -1 without a backlight
     void setBrightness(int level);
     void screenOff();
     bool wake();  // true if the screen was off

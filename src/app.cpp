@@ -726,10 +726,16 @@ int App::run(int argcIn, char** argvIn) {
         for (const auto& k : keys) dispatch(k);
 
         if (now >= nextPoll_) {
+            bool late = now - nextPoll_ > 2 * kPollInterval;  // kennel was stopped (frozen by a sleep script)
             nextPoll_ = now + kPollInterval;
             if (sys.poll()) dirty = true;
             batteryLog.sample(sys.battery);
             checkBattery();
+            // Others switch the backlight too (the power button script). Auto screen off counts only
+            // time with the screen on.
+            int level = sys.backlight();
+            if (sys.screenIsOff() && level > 0) sys.wake();
+            if (late || level == 0) lastInput_ = now;
             if (settings.screenOffAfter > 0 && !launch_.active && !sys.screenIsOff() &&
                 now - lastInput_ >= settings.screenOffAfter)
                 screenOff();

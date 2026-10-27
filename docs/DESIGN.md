@@ -206,7 +206,7 @@ Panel from the right over dimmed Home: battery (level, estimated time left or un
 | Categories | `hidden`, `order` | `;`-separated names |
 | Confirm button | `swap_confirm` | 0 south, 1 east |
 | Low battery warning | `low_battery` | 0, 10, 15, 20, 30 (toast at the level and at 5 %) |
-| Screen off after | `screen_off_after` | seconds without a button press until the backlight goes to 0 (as the dock's Screen off), 0 never (default); the menu offers Never, 1, 2, 5, 10, 30 min and is shown only with a backlight |
+| Screen off after | `screen_off_after` | seconds without a button press until the backlight goes to 0 (as the dock's Screen off), 0 never (default); the menu offers Never, 1, 2, 5, 10, 30 min and is shown only with a backlight. Only time with the screen on counts: the timer restarts while another program (goodluckOS `toggle-screen.sh` on the power button) holds the backlight at 0, and after kennel was stopped (a poll more than 2 s late). A screen kennel turned off and another program turned on again counts as on |
 | Report app errors | `report_errors` | 0, 1 |
 | Expert mode | `expert` | 0, 1 |
 | Performance overlay (Expert page) | `perf_overlay` | 0, 1 |

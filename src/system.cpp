@@ -173,6 +173,12 @@ int System::brightness() const {
     return (int)v;
 }
 
+int System::backlight() const {
+    long v = -1;
+    if (hasBacklight() && !readLong(platform.backlight + "/brightness", v)) v = -1;
+    return (int)v;
+}
+
 void System::setBrightness(int level) {
     if (!hasBacklight()) return;
     writeFile(platform.backlight + "/brightness", std::to_string(std::clamp<long>(level, 1, maxBrightness_)));
