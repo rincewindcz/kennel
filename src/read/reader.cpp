@@ -21,6 +21,7 @@ constexpr float kPanelW = 320;
 constexpr double kIdleCap = 180;      // longest gap between key presses counted as reading
 constexpr double kRefresh = 30;       // status bar refresh for the reading time and battery
 constexpr double kBuildSlice = 0.02;  // page count layout per main loop pass
+constexpr int kInputPollMs = 10;      // waitEvent() interval
 }  // namespace
 
 // ------------------------------------------------------------------ setup ---
@@ -545,7 +546,7 @@ int Reader::run(int argc, char** argv) {
         if (!script_.empty()) timeout = timeout < 0 ? 50 : std::min(timeout, 50);
         if (dirty_ || !gamepadStarted || countingPages()) timeout = 0;
         SDL_Event ev;
-        bool got = timeout < 0 ? SDL_WaitEvent(&ev) : SDL_WaitEventTimeout(&ev, timeout);
+        bool got = waitEvent(&ev, timeout, kInputPollMs);
         keys.clear();
         while (got) {
             if (ev.type == SDL_EVENT_QUIT) running_ = false;

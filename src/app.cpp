@@ -24,6 +24,7 @@ namespace {
 constexpr float kTopBar = 32, kBottomBar = 36;
 constexpr double kPollInterval = 1.0;
 constexpr double kLaunchTimeout = 8.0;
+constexpr int kInputPollMs = 10, kInputPollOffMs = 100;  // waitEvent() interval, screen on and off
 }  // namespace
 
 Screen::Screen() { shown.go(1.f, 0.2f); }
@@ -709,7 +710,7 @@ int App::run(int argcIn, char** argvIn) {
         int repeat = input.timeoutMs();
         if (repeat >= 0) timeout = std::min(timeout, repeat);
         if (launch_.active && launch_.started) timeout = std::min(timeout, 500);
-        bool got = needFrame ? SDL_PollEvent(&ev) : SDL_WaitEventTimeout(&ev, timeout);
+        bool got = needFrame ? SDL_PollEvent(&ev) : waitEvent(&ev, timeout, sys.screenIsOff() ? kInputPollOffMs : kInputPollMs);
         keys.clear();
         while (got) {
             if (ev.type == SDL_EVENT_QUIT) running_ = false;

@@ -43,3 +43,7 @@ private:
 };
 
 extern Input input;
+
+// Waits up to timeoutMs for an event, forever below 0. SDL3 can't wait for input on KMSDRM and polls
+// every 1 ms there; this polls every intervalMs instead.
+bool waitEvent(SDL_Event* ev, int timeoutMs, int intervalMs);

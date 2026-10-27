@@ -20,6 +20,7 @@ constexpr float kStripH = 28, kBarH = 24;
 constexpr float kPanelW = 300;
 constexpr int kMinFont = 10, kMaxFont = 20;
 constexpr int kStickDead = 12000, kStickFast = 28000;
+constexpr int kInputPollMs = 10;  // waitEvent() interval
 
 const uint32_t kAnsi[16] = {0x20242d, 0xe06c75, 0x98c379, 0xe5c07b, 0x61afef, 0xc678dd, 0x56b6c2, 0xdcdfe4,
                             0x5c6370, 0xff7a85, 0xb5e890, 0xffd68a, 0x7cc4ff, 0xde9bf0, 0x6fd3df, 0xffffff};
@@ -642,7 +643,7 @@ int Term::run(int argc, char** argv) {
         if (!script_.empty()) timeout = timeout < 0 ? 50 : std::min(timeout, 50);
         if (dirty_ || !gamepadStarted) timeout = 0;
         SDL_Event ev;
-        bool got = timeout < 0 ? SDL_WaitEvent(&ev) : SDL_WaitEventTimeout(&ev, timeout);
+        bool got = waitEvent(&ev, timeout, kInputPollMs);
         keys.clear();
         while (got) {
             switch (ev.type) {

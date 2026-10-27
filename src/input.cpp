@@ -1,5 +1,6 @@
 #include "input.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 
@@ -193,3 +194,18 @@ std::string Input::label(Key k) const {
 }
 
 std::string Input::padName() const { return pad_ ? SDL_GetGamepadName(pad_) : "none"; }
+
+bool waitEvent(SDL_Event* ev, int timeoutMs, int intervalMs) {
+    static const bool kmsdrm = [] {
+        const char* driver = SDL_GetCurrentVideoDriver();
+        return driver && SDL_strcmp(driver, "kmsdrm") == 0;
+    }();
+    if (!kmsdrm) return timeoutMs < 0 ? SDL_WaitEvent(ev) : SDL_WaitEventTimeout(ev, timeoutMs);
+    const Uint64 end = timeoutMs < 0 ? UINT64_MAX : SDL_GetTicks() + timeoutMs;
+    for (;;) {
+        if (SDL_PollEvent(ev)) return true;
+        const Uint64 now = SDL_GetTicks();
+        if (now >= end) return false;
+        SDL_Delay((Uint32)std::min<Uint64>(end - now, intervalMs));
+    }
+}
