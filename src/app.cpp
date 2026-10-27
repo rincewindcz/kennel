@@ -712,14 +712,17 @@ int App::run(int argcIn, char** argvIn) {
         if (launch_.active && launch_.started) timeout = std::min(timeout, 500);
         bool got = needFrame ? SDL_PollEvent(&ev) : waitEvent(&ev, timeout, sys.screenIsOff() ? kInputPollOffMs : kInputPollMs);
         keys.clear();
+        bool pressed = false;  // any key or button, also those kennel doesn't map (volume, power)
         while (got) {
             if (ev.type == SDL_EVENT_QUIT) running_ = false;
             else if (ev.type == SDL_EVENT_WINDOW_EXPOSED || ev.type == SDL_EVENT_USER) dirty = true;
+            else if (ev.type == SDL_EVENT_KEY_DOWN || ev.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) pressed = true;
             input.handle(ev, keys);
             got = SDL_PollEvent(&ev);
         }
         anim::tick();
         now = anim::now();
+        if (pressed) lastInput_ = now;
         input.tick(keys);
         automate(keys);
         finishJobs();
