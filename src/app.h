@@ -143,6 +143,7 @@ private:
     bool running_ = true;
     int exitCode_ = 0;
     double nextPoll_ = 0;
+    double nextStatePoll_ = 0;  // sys.poll() while the screen is off
     double lastInput_ = 0;
     bool dark_ = false;      // backlight off: nothing is drawn
     long clockMinute_ = -1;  // minute shown by the top bar clock

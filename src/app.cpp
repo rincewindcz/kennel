@@ -23,6 +23,7 @@ App app;
 namespace {
 constexpr float kTopBar = 32, kBottomBar = 36;
 constexpr double kPollInterval = 1.0;
+constexpr double kDarkStateInterval = 5.0;  // device state poll while the screen is off
 constexpr double kLaunchTimeout = 8.0;
 constexpr int kInputPollMs = 10, kInputPollOffMs = 100;  // waitEvent() interval, screen on and off
 
@@ -747,9 +748,12 @@ int App::run(int argcIn, char** argvIn) {
         if (now >= nextPoll_) {
             bool late = now - nextPoll_ > 2 * kPollInterval;  // kennel was stopped (frozen by a sleep script)
             nextPoll_ = now + kPollInterval;
-            if (sys.poll()) dirty = true;
-            batteryLog.sample(sys.battery);
-            checkBattery();
+            if (!dark_ || now >= nextStatePoll_) {
+                nextStatePoll_ = now + kDarkStateInterval;
+                if (sys.poll()) dirty = true;
+                batteryLog.sample(sys.battery);
+                checkBattery();
+            }
             // Others switch the backlight too (the power button script). Auto screen off counts only
             // time with the screen on.
             int level = sys.backlight();
