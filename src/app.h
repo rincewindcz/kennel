@@ -32,6 +32,7 @@ public:
     virtual std::vector<Hint> hints() const { return {}; }
     virtual std::string title() const { return {}; }
     virtual void resumed() {}
+    virtual bool live() const { return false; }  // changes on its own (update()): redrawn every poll
 
     void close();
     bool closing() const { return closing_; }
@@ -130,6 +131,7 @@ private:
     void reportLastSession();
     void automate(std::vector<KeyEvent>& keys);
     void finishJobs();
+    void setDark(bool dark);
 
     std::vector<std::unique_ptr<Screen>> stack_;
     std::vector<std::unique_ptr<Screen>> pending_;
@@ -142,6 +144,8 @@ private:
     int exitCode_ = 0;
     double nextPoll_ = 0;
     double lastInput_ = 0;
+    bool dark_ = false;      // backlight off: nothing is drawn
+    long clockMinute_ = -1;  // minute shown by the top bar clock
     int warnedBattery_ = 101;
     std::vector<std::string> script_;
     double scriptAt_ = 0;

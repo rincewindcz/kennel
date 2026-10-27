@@ -84,7 +84,7 @@ Each indicator is an icon with an optional value; left: time and screen title, r
 | TF card | `external_mount` in `/proc/mounts` | when mounted |
 | USB | `/sys/class/udc/*/state` = `configured` | when connected to a PC |
 
-Values are polled every second; a redraw happens only when a shown value changes.
+Values are polled every second; a redraw happens only when a shown value changes: CPU and free memory count only while their indicator is on, the time once a minute (both formats show minutes). Pages that reload on their own (Status, Kernel log, Processes; `Screen::live()`) are redrawn every poll.
 
 ### 4.2 Bottom bar and dock
 
@@ -254,7 +254,7 @@ The gamepad subsystem is initialized after the first frame (its device scan dela
 
 ### 11.2 Main loop
 
-Tweens (`anim::Tween`) animate floats with `outCubic` or `inOutQuad`; durations are multiplied by the animation speed (0 jumps). Any tween still moving calls `anim::keepAlive()`; the main loop renders with vsync while that happens and otherwise waits in `waitEvent` (`input.cpp`) until input, a key repeat, a worker result or the next 1 s status poll. SDL3 has no event wait on KMSDRM (no `WaitEventTimeout` in the video backend), so `SDL_WaitEvent*` polls every 1 ms there: idle kennel woke about 730 times per second and used 12 % of one core on the GA36-MB. `waitEvent` polls every 10 ms on KMSDRM (100 ms in kennel while the screen is off) and calls `SDL_WaitEventTimeout` on other video drivers; kennel-read and kennel-term use it too.
+Tweens (`anim::Tween`) animate floats with `outCubic` or `inOutQuad`; durations are multiplied by the animation speed (0 jumps). Any tween still moving calls `anim::keepAlive()`; the main loop renders with vsync while that happens and otherwise waits in `waitEvent` (`input.cpp`) until input, a key repeat, a worker result or the next 1 s status poll. SDL3 has no event wait on KMSDRM (no `WaitEventTimeout` in the video backend), so `SDL_WaitEvent*` polls every 1 ms there: idle kennel woke about 730 times per second and used 12 % of one core on the GA36-MB. `waitEvent` polls every 10 ms on KMSDRM (100 ms in kennel while the screen is off) and calls `SDL_WaitEventTimeout` on other video drivers; kennel-read and kennel-term use it too. While the backlight is off (kennel's Screen off, or another program such as goodluckOS `toggle-screen.sh`, seen at the next poll or button press) nothing is drawn; pending redraws wait for the first frame after it comes back.
 
 | Motion | Properties | Duration |
 |---|---|---|

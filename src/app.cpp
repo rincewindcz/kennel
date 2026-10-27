@@ -25,6 +25,15 @@ constexpr float kTopBar = 32, kBottomBar = 36;
 constexpr double kPollInterval = 1.0;
 constexpr double kLaunchTimeout = 8.0;
 constexpr int kInputPollMs = 10, kInputPollOffMs = 100;  // waitEvent() interval, screen on and off
+
+// Top bar time: Auto is the wall clock once it is set, the uptime before. Both show minutes.
+Settings::TimeMode shownTime(double& seconds) {
+    Settings::TimeMode mode = settings.time;
+    double wall = wallSeconds();
+    if (mode == Settings::TimeMode::Auto) mode = wallClockValid(wall) ? Settings::TimeMode::Clock : Settings::TimeMode::Uptime;
+    seconds = mode == Settings::TimeMode::Clock ? wall : uptimeSeconds();
+    return mode;
+}
 }  // namespace
 
 Screen::Screen() { shown.go(1.f, 0.2f); }
@@ -130,6 +139,13 @@ void App::reboot() {
 void App::screenOff() {
     sys.screenOff();
     input.releaseAll();
+    setDark(sys.screenIsOff());
+}
+
+// Nothing is drawn while the backlight is off; the first frame after it comes back is fresh.
+void App::setDark(bool dark) {
+    if (dark_ && !dark) dirty = true;
+    dark_ = dark;
 }
 
 void App::eject() {
@@ -462,11 +478,10 @@ void App::drawTopBar() {
     if (settings.barUsb && sys.usbConnected) indicator("usb", {}, theme::dim, theme::dim);
 
     float x = 14;
-    Settings::TimeMode mode = settings.time;
-    double wall = wallSeconds();
-    if (mode == Settings::TimeMode::Auto) mode = wallClockValid(wall) ? Settings::TimeMode::Clock : Settings::TimeMode::Uptime;
+    double seconds;
+    Settings::TimeMode mode = shownTime(seconds);
     if (mode == Settings::TimeMode::Clock) {
-        time_t t = (time_t)wall;
+        time_t t = (time_t)seconds;
         tm lt{};
         localtime_r(&t, &lt);
         gfx.icon("clock", x, cy - 9, 18, theme::dim);
@@ -475,7 +490,7 @@ void App::drawTopBar() {
     } else if (mode == Settings::TimeMode::Uptime) {
         gfx.icon("timer", x, cy - 9, 18, theme::dim);
         x += 22;
-        x += gfx.text(Font::SmallBold, formatClock(uptimeSeconds()), x, cy - th / 2, theme::text) + 12;
+        x += gfx.text(Font::SmallBold, formatClock(seconds), x, cy - th / 2, theme::text) + 12;
     }
     if (Screen* s = top()) {
         std::string title = s->title();
@@ -710,7 +725,7 @@ int App::run(int argcIn, char** argvIn) {
         int repeat = input.timeoutMs();
         if (repeat >= 0) timeout = std::min(timeout, repeat);
         if (launch_.active && launch_.started) timeout = std::min(timeout, 500);
-        bool got = needFrame ? SDL_PollEvent(&ev) : waitEvent(&ev, timeout, sys.screenIsOff() ? kInputPollOffMs : kInputPollMs);
+        bool got = needFrame ? SDL_PollEvent(&ev) : waitEvent(&ev, timeout, dark_ ? kInputPollOffMs : kInputPollMs);
         keys.clear();
         bool pressed = false;  // any key or button, also those kennel doesn't map (volume, power)
         while (got) {
@@ -727,6 +742,7 @@ int App::run(int argcIn, char** argvIn) {
         automate(keys);
         finishJobs();
         for (const auto& k : keys) dispatch(k);
+        if (pressed || !keys.empty()) setDark(sys.screenIsOff() || sys.backlight() == 0);
 
         if (now >= nextPoll_) {
             bool late = now - nextPoll_ > 2 * kPollInterval;  // kennel was stopped (frozen by a sleep script)
@@ -742,14 +758,23 @@ int App::run(int argcIn, char** argvIn) {
             if (settings.screenOffAfter > 0 && !launch_.active && !sys.screenIsOff() &&
                 now - lastInput_ >= settings.screenOffAfter)
                 screenOff();
-            if (settings.time != Settings::TimeMode::Off) dirty = true;
+            setDark(sys.screenIsOff() || level == 0);
+            double seconds;
+            long minute = shownTime(seconds) == Settings::TimeMode::Off ? -1 : (long)(seconds / 60);
+            if (minute != clockMinute_) {
+                clockMinute_ = minute;
+                dirty = true;
+            }
+            if (std::any_of(stack_.begin(), stack_.end(), [](const auto& s) { return s->live(); })) dirty = true;
         }
         if (launch_.active && launch_.started && now - launch_.since > kLaunchTimeout) {
             launch_.active = false;
             toast("The app did not start", "triangle-alert", theme::bad);
         }
 
-        if (dirty || needFrame || !pending_.empty() || art.busy()) {
+        if (dark_ && gamepadStarted) {
+            needFrame = false;  // dirty stays set for the first frame after the screen comes back
+        } else if (dirty || needFrame || !pending_.empty() || art.busy()) {
             dirty = false;
             frame();
             needFrame = anim::alive() || !pending_.empty();

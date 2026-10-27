@@ -17,6 +17,7 @@ public:
     void draw() override;
     std::vector<Hint> hints() const override;
     std::string title() const override { return title_; }
+    bool live() const override { return refresh_ > 0; }
 
 private:
     void reload();
@@ -41,6 +42,7 @@ public:
     void draw() override;
     std::vector<Hint> hints() const override;
     std::string title() const override { return "Processes"; }
+    bool live() const override { return true; }
 
 private:
     void sample();

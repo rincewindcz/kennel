@@ -6,6 +6,7 @@
 
 #include "paths.h"
 #include "platform.h"
+#include "settings.h"
 #include "util.h"
 
 #ifdef KENNEL_ALSA
@@ -160,7 +161,8 @@ bool System::poll() {
 #endif
     std::string sig = strprintf("%d|%s|%d|%d|%d|%d|%d|%d|%llu", battery.capacity, battery.status.c_str(), battery.externalPower,
                                 externalMounted, usbConnected, hasVolume() ? volume() : -1, hasOutputSwitch() ? speaker() : -1,
-                                cpuPercent, (unsigned long long)(memAvailable >> 20));
+                                settings.barCpu ? cpuPercent : -1,
+                                settings.barMemory ? (unsigned long long)(memAvailable >> 20) : 0ull);
     if (hasMute()) sig += muted() ? "|m" : "|u";
     bool changed = sig != signature_;
     signature_ = sig;
