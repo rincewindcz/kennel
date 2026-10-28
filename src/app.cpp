@@ -130,6 +130,7 @@ void App::powerOff() {
 
 void App::powerOffNow(const std::string& reason) {
     logf("power off: %s", reason.c_str());
+    if (sys.wake()) setDark(false);  // S90backlight persists the level at shutdown and restores it at boot
     saveState();
     toast(reason, "power");
     runSystem(platform.poweroff, "Power off failed");
