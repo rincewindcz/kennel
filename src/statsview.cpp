@@ -288,7 +288,7 @@ void StatsScreen::drawBattery(const SDL_FRect& area, float alpha) {
     gfx.text(Font::Tiny, formatClock(t1), plot.x + plot.w, plot.y + plot.h + 6, fade(theme::faint, alpha), 0, Align::Right);
     gfx.text(Font::Tiny, "uptime", plot.x + plot.w / 2, plot.y + plot.h + 6, fade(theme::faint, alpha), 0, Align::Center);
 
-    // One 2 px column per step; gaps of more than five minutes without samples stay empty.
+    // One 2 px column per step, linear between samples (also across sleep or gaps in the log).
     const float step = 2;
     size_t j = 0;
     for (float x = 0; x < plot.w; x += step) {
@@ -298,7 +298,6 @@ void StatsScreen::drawBattery(const SDL_FRect& area, float alpha) {
         if (t < v[j].uptime) continue;
         const BatterySample& a = v[j];
         const BatterySample& n = j + 1 < v.size() ? v[j + 1] : v[j];
-        if (n.uptime - a.uptime > 300) continue;
         double f = n.uptime > a.uptime ? (t - a.uptime) / (n.uptime - a.uptime) : 0;
         float cap = (float)(a.capacity + (n.capacity - a.capacity) * f);
         float y = plot.y + plot.h * (1 - std::clamp(cap, 0.f, 100.f) / 100);
