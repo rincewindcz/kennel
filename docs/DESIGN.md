@@ -77,7 +77,7 @@ Each indicator is an icon with an optional value; left: time and screen title, r
 |---|---|---|
 | Clock or uptime | `CLOCK_REALTIME` when after 2024-01-01, else `CLOCK_BOOTTIME`; setting Auto, Clock, Uptime, Off | always |
 | Screen title | top screen's `title()` | outside Home, when there is room |
-| Battery %, charging | first `/sys/class/power_supply/*` of type `Battery`: `capacity`, `status`; chargers of type `Mains`/`USB`: `online` | amber at 20 %, red at 10 % |
+| Battery %, charging | first `/sys/class/power_supply/*` of type `Battery`: `capacity`, `status`, and `current_now`: `Charging` under 5 mA counts as `Not charging`, since the AXP driver keeps reporting `Charging` after the charger stopped; chargers of type `Mains`/`USB`: `online` | amber at 20 %, red at 10 % |
 | Volume, output | ALSA volume control, mute switch, speaker switch | headphone glyph when the speaker is off |
 | Free memory | `MemAvailable`, as `438M` or `1.2G` | amber under 10 % of `MemTotal` |
 | CPU | busy share of all cores from `/proc/stat` between two polls | amber from 85 % |
@@ -209,6 +209,7 @@ Panel from the right over dimmed Home: battery (level, estimated time left or un
 | Power off on low battery | `critical_battery` | percent, 0 off (default); the menu offers Off, 3, 5, 8 %. At the level without a charger: the screen comes on, a toast warns, and 30 s later kennel saves its state and runs `poweroff` unless a charger was connected meanwhile. Shown when the profile has `poweroff` |
 | Power off after | `power_off_after` | seconds without a button press, 0 never (default); the menu offers Never, 10, 15, 30 min, 1, 2 hours. Counts with the screen on and off, restarts after kennel was stopped (sleep); not on a charger. A screen kennel dimmed or turned off is restored first, so `S90backlight` does not persist level 0 or 1 into the next boot. Shown when the profile has `poweroff` |
 | Screen off after | `screen_off_after` | seconds without a button press (any key or gamepad button, also volume and power keys kennel doesn't use) until the backlight goes to 0 (as the dock's Screen off), 0 never (default); for the last 10 s (half the time below 20 s) the backlight is at level 1 and a press restores it and is swallowed; the menu offers Never, 1, 2, 5, 10, 30 min and is shown only with a backlight. Only time with the screen on counts: the timer restarts while another program (goodluckOS `toggle-screen.sh` on the power button) holds the backlight at 0, and after kennel was stopped (a poll more than 2 s late). A screen kennel turned off and another program turned on again counts as on |
+| Limit battery charge | none | state of the platform `charge_limit` command, which on goodluckOS sets the PMIC's charge target to 4.1 V (on) or 4.2 V (off). The limit must be enforced outside kennel, which appd kills during a game. Shown when the command works |
 | Report app errors | `report_errors` | 0, 1 |
 | Expert mode | `expert` | 0, 1 |
 | Performance overlay (Expert page) | `perf_overlay` | 0, 1 |
@@ -235,7 +236,7 @@ Menu: INSPECT (Status, Logs, Processes, Library, Sessions), TOOLS (Terminal, Fil
 
 Text pages (logs, reports) use JetBrains Mono, strip ANSI escapes and control characters, expand tabs, and wrap by character count. Keys: up/down line, L1/R1 page, L2/R2 top/bottom, Y wrap on/off (off: left/right scroll 8 columns, UTF-8 safe), X follow on/off on reloading pages, B back.
 
-Root operations are limited to what the platform permits (goodluckOS `doas.conf`: `poweroff`, `reboot`, `evsieve`, `appctl`, `umount`). On goodluckOS `dmesg_restrict` is 0, so the kernel log is readable as `player`.
+Root operations are limited to what the platform permits (goodluckOS `doas.conf`: `poweroff`, `reboot`, `evsieve`, `appctl`, `umount`, `usb-mode.sh`, `charge-limit.sh`). On goodluckOS `dmesg_restrict` is 0, so the kernel log is readable as `player`.
 
 ## 11. Rendering and animation
 

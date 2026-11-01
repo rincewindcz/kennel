@@ -22,6 +22,9 @@ protected:
 // USB mode row (platform usb_mode*), in Settings and quick settings.
 MenuItem usbModeItem();
 
+// Charge limit row (platform charge_limit*) in Settings; returns false on a system without the helper.
+bool chargeLimitItem(MenuItem& out);
+
 // Quick settings over Home (START): brightness, volume, output, USB mode and shortcuts.
 class QuickPanel : public MenuPanel {
 public:

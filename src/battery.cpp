@@ -111,6 +111,7 @@ std::string describeEstimate(const Battery& b, const BatteryEstimate& e) {
     if (b.capacity < 0) return "no battery";
     std::string out = strprintf("%d%%", b.capacity);
     if (b.status == "Full") return out + ", full";
+    if (b.status == "Not charging") return out + ", not charging";
     if (e.seconds < 0) return b.status == "Charging" ? out + ", charging" : out;
     std::string t = formatDuration(std::max(300.0, std::round(e.seconds / 300) * 300));
     return out + (b.status == "Charging" ? ", full in about " : ", about ") + t + (b.status == "Charging" ? "" : " left");

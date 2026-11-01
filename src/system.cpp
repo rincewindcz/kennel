@@ -15,9 +15,10 @@
 
 System sys;
 
+static constexpr double kChargeTrickle = 0.005;  // A
+
 #ifdef KENNEL_ALSA
 namespace {
-
 snd_mixer_t* mixer = nullptr;
 snd_mixer_elem_t* volumeElem = nullptr;
 snd_mixer_elem_t* outputElem = nullptr;
@@ -105,7 +106,11 @@ void System::readBattery() {
         battery.status = readLine(batteryDir_ + "/status");
         battery.health = readLine(batteryDir_ + "/health");
         if (readLong(batteryDir_ + "/voltage_now", v)) battery.voltage = v / 1e6;
-        if (readLong(batteryDir_ + "/current_now", v)) battery.current = v / 1e6;
+        if (readLong(batteryDir_ + "/current_now", v)) {
+            battery.current = v / 1e6;
+            // The AXP driver reads Charging after the charger stopped; only a trickle still flows.
+            if (battery.status == "Charging" && std::fabs(battery.current) < kChargeTrickle) battery.status = "Not charging";
+        }
         if (readLong(batteryDir_ + "/charge_full_design", v)) battery.designCharge = v / 1e6;
     }
     for (const auto& c : chargerDirs_) {

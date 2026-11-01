@@ -56,6 +56,8 @@ void Platform::load(const std::string& path) {
             }
         }
         str("usb_network", usbNetwork);
+        str("charge_limit", chargeLimit);
+        str("charge_limit_set", chargeLimitSet);
         list("contributors", contributors);
         str("kernel_log", kernelLog);
         list("mounts", mounts);

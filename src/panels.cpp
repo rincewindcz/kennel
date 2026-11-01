@@ -10,6 +10,7 @@ namespace {
 constexpr float kPanelW = 320;
 
 int usbSwitching = -1;  // index of the mode being switched to, -1: none
+bool chargeLimited = false;
 
 // Index into platform.usbModes of the current mode; 0 when unknown.
 int usbModeIndex() {
@@ -45,6 +46,24 @@ MenuItem usbModeItem() {
                          }
                      });
     });
+}
+
+bool chargeLimitItem(MenuItem& out) {
+    int status = 0;
+    std::string state = trim(runCapture(platform.chargeLimit, &status));
+    if (status != 0) return false;
+    chargeLimited = state == "on";
+    out = items::toggle("battery-charging", "Limit battery charge", [] { return chargeLimited; }, [](bool v) {
+        app.runAsync(replaceAll(platform.chargeLimitSet, "%m", v ? "on" : "off"), [v](int status, const std::string& out) {
+            if (status == 0) {
+                chargeLimited = v;
+                app.toast(v ? "Charge limit on" : "Charge limit off", "battery-charging", theme::good);
+            } else {
+                app.toast("Charge limit change failed: " + trim(out), "triangle-alert", theme::bad);
+            }
+        });
+    });
+    return true;
 }
 
 MenuPanel::MenuPanel(std::string title, std::vector<MenuItem> items, bool closeOnAction)

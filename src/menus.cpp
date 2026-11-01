@@ -321,6 +321,10 @@ void App::openSettings() {
             settings.reportErrors = v;
             save();
         }));
+        if (platform.hasChargeLimit()) {
+            MenuItem limit;
+            if (chargeLimitItem(limit)) m.push_back(std::move(limit));
+        }
         if (platform.hasUsbModes()) m.push_back(usbModeItem());
         m.push_back(items::link("hard-drive", "Backup", [] { openBackup(); }));
         m.push_back(items::toggle("terminal", "Expert mode", [] { return settings.expert; }, [](bool v) {
