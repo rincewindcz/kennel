@@ -215,7 +215,7 @@ Read as Puppy does: the files in the platform's `sources`, in order (globs sorte
 |---|---|---|
 | `ART` | `ENTRY` | card image, preferred over `ICON` |
 | `ART_DIRECTORIES` | `ARCHIVE` | directories searched for `<stem>.png`, `.jpg`, `.jpeg` before `ENTRY_ICONS_DIRECTORIES` |
-| `COLOR` | both | `#rrggbb` accent of generated cards and the category |
+| `COLOR` | both | `#rrggbb` colour of generated cards: of that card in `ENTRY`, of the category and its cards in `ARCHIVE` |
 | `HIDDEN` | both | not shown on Home |
 
 Images close to 3:2 and at least half the card size cover the card; portrait images (aspect below 0.85: book covers, portrait box art) get a poster card with the image at the left, the title beside it and the blurred image as background; smaller images are shown as an icon on a stock card. Archive files without their own image whose extension is `epub`, `fb2`, `mobi`, `azw`, `azw3` or `prc` show their embedded cover (EPUB cover-image, meta cover, guide or cover page; FB2 coverpage; MOBI EXTH 201), extracted on the art worker thread and cached in `~/.cache/kennel/art`. ROM titles drop trailing `(...)` and `[...]` groups, which are shown as tags. Archive files with these extensions use the title stored in the book (EPUB `dc:title`, FB2 `book-title`, MOBI full name or EXTH 503), with the author (EPUB `dc:creator`, FB2 first `author`, MOBI EXTH 100) as the first tag; books without a title keep the file name.

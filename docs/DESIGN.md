@@ -136,7 +136,7 @@ Art lookup per entry: `ART`, `ART_DIRECTORIES` and `ENTRY_ICONS_DIRECTORIES` (ea
 | Card | 300x200, 14 px rounded corners baked into the alpha channel |
 | Cover mode | image at least half the card size and within 35 % of 3:2: area-average downscale (premultiplied) and centre crop |
 | Icon mode | other images: fitted into 220x124, at most 2x, drawn centred on a stock card above the title |
-| Stock card | category image with a dark scrim, or a diagonal gradient of the category colour (hash of the name, or `COLOR`), title in 26 px, tags above it; composed into a render target (premultiplied alpha) |
+| Stock card | category image with a dark scrim, or a diagonal gradient of the entry's `COLOR`, else the category colour (`COLOR` of the archive, or a hash of the name), title in 26 px, tags above it; composed into a render target (premultiplied alpha) |
 | Backdrop | 128x96 cover, three 7 px box blur passes |
 | Disk cache | `~/.cache/kennel/art/<fnv1a(path, size, mtime, card size)>.{c,i,b}.qoi` |
 | Worker | one thread; each frame's requests replace the queue, so entries scrolled past are not decoded; a finished job wakes the main loop with `SDL_EVENT_USER` |

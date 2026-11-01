@@ -293,11 +293,7 @@ void Catalog::load() {
             e.source = rec.file;
             e.line = s.line;
             e.hidden = hidden;
-            Category& cat = categoryFor(e.category);
-            if (hasColor) {
-                e.color = color;
-                cat.color = color;
-            }
+            if (hasColor) e.color = color;
             add(std::move(e));
             continue;
         }
