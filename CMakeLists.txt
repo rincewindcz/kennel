@@ -17,7 +17,7 @@ find_package(Threads REQUIRED)
 
 find_package(ZLIB REQUIRED)
 
-# Code shared by kennel, kennel-read, kennel-term, kennel-calc and kennel-edit.
+# Code shared by kennel, kennel-read, kennel-term, kennel-calc, kennel-edit and kennel-music.
 add_library(kennelcore STATIC
     src/zip.cpp
     src/tokenizer.cpp
@@ -81,6 +81,11 @@ add_executable(kennel-edit ${EDIT_SOURCES})
 target_include_directories(kennel-edit PRIVATE src/edit)
 target_link_libraries(kennel-edit PRIVATE kennelcore)
 
+file(GLOB MUSIC_SOURCES CONFIGURE_DEPENDS src/music/*.cpp)
+add_executable(kennel-music ${MUSIC_SOURCES})
+target_include_directories(kennel-music PRIVATE src/music)
+target_link_libraries(kennel-music PRIVATE kennelcore)
+
 if(KENNEL_ALSA)
     find_path(ALSA_INCLUDE_DIR alsa/asoundlib.h REQUIRED)
     find_library(ALSA_LIBRARY asound REQUIRED)
@@ -95,6 +100,7 @@ if(KENNEL_STATIC_CXX)
     target_link_options(kennel-term PRIVATE -static-libstdc++ -static-libgcc)
     target_link_options(kennel-calc PRIVATE -static-libstdc++ -static-libgcc)
     target_link_options(kennel-edit PRIVATE -static-libstdc++ -static-libgcc)
+    target_link_options(kennel-music PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 
 # Run from the build directory with the repository's data.
@@ -102,7 +108,7 @@ file(CREATE_LINK ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets SYMBOLIC)
 file(CREATE_LINK ${CMAKE_SOURCE_DIR}/platforms ${CMAKE_BINARY_DIR}/platforms SYMBOLIC)
 file(CREATE_LINK ${CMAKE_SOURCE_DIR}/tools/kennel-run ${CMAKE_BINARY_DIR}/kennel-run SYMBOLIC)
 
-install(TARGETS kennel kennel-read kennel-term kennel-calc kennel-edit DESTINATION .)
+install(TARGETS kennel kennel-read kennel-term kennel-calc kennel-edit kennel-music DESTINATION .)
 install(PROGRAMS tools/kennel-run DESTINATION .)
 install(DIRECTORY assets/fonts assets/term DESTINATION assets)
 install(DIRECTORY assets/icons/20 assets/icons/32 DESTINATION assets/icons)

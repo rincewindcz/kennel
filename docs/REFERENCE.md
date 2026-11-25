@@ -2,7 +2,7 @@
 
 Game and app launcher for Linux handhelds with a 640x480 screen and a gamepad. Written in C++20 on SDL3 and SDL3_ttf. First target: goodluckOS on the GA36-MB (R36S clone, Allwinner A23, Mali-400), where it replaces Puppy and reads the same `.puppy` files. Device integration lives in platform profiles (`platforms/*.ini`), so other systems need a profile, not code changes.
 
-The repository builds kennel and `kennel-read`, a minimal e-book reader (section "kennel-read"), `kennel-term`, a terminal with an on-screen keyboard and command suggestions (section "kennel-term"), `kennel-calc`, a basic and scientific calculator (section "kennel-calc"), and `kennel-edit`, a text editor (section "kennel-edit").
+The repository builds kennel and `kennel-read`, a minimal e-book reader (section "kennel-read"), `kennel-term`, a terminal with an on-screen keyboard and command suggestions (section "kennel-term"), `kennel-calc`, a basic and scientific calculator (section "kennel-calc"), `kennel-edit`, a text editor (section "kennel-edit"), and `kennel-music`, an album player (section "kennel-music").
 
 Design and implementation notes: [DESIGN.md](DESIGN.md).
 
@@ -21,7 +21,7 @@ Design and implementation notes: [DESIGN.md](DESIGN.md).
 | Screen off after | Settings > Screen off after turns the backlight off after 1 to 30 minutes without a button press, dimmed for the last 10 s; the next press wakes it and is swallowed |
 | Power off | Settings > Power off after (10 minutes to 2 hours without a button press, not on a charger) and Power off on low battery (3, 5 or 8 %, 30 s after a warning) |
 | Quick settings | START: battery level with estimated time left, brightness, volume, mute, speaker or headphones, USB mode, shortcuts (Files, Statistics, Calculator, Settings) |
-| Files | file browser: open, copy, cut, paste, rename, delete, new folder, new file, edit, info, hidden files; files open with their library entry, an archive's command, the reader, the text viewer or the image viewer (carousel over the folder's images); expert mode: terminal in the folder, run scripts |
+| Files | file browser: open, copy, cut, paste, rename, delete, new folder, new file, edit, info, hidden files; files open with their library entry, an archive's command, the reader, the text viewer, the image viewer (carousel over the folder's images, full screen) or kennel-music; expert mode: terminal in the folder, run scripts |
 | Details | X: statistics of the entry, Play, Favorite, Hide from Home, Start at boot, last app log, reset statistics; expert: run in terminal, entry internals |
 | Statistics | per entry play time, sessions, last played, last exit code; statistics page with Overview, Most played, Categories, Recent and Battery tabs; error report when an app exits with a failure code |
 | Battery | level sampled every minute while kennel or a launched app runs; graph per boot, drain rate and time left |
@@ -49,12 +49,12 @@ Up/down switch categories on Home. Global hotkeys of the system (goodluckOS: STA
 Requirements: CMake, Ninja, clang and lld (cross build), Arch packages `sdl3`, `sdl3_ttf`, `alsa-lib`, `zlib` (host build). Icons are rasterized PNGs in `assets/icons/{20,32}`; `scripts/icons.sh` regenerates them from `assets/icons/svg` with `rsvg-convert`.
 
 ```sh
-scripts/build.sh host     # build/host/{kennel,kennel-read,kennel-term,kennel-calc,kennel-edit}
-scripts/build.sh armhf    # build/armhf/{kennel,kennel-read,kennel-term,kennel-calc,kennel-edit}, armv7-a hard float, static libstdc++
+scripts/build.sh host     # build/host/{kennel,kennel-read,kennel-term,kennel-calc,kennel-edit,kennel-music}
+scripts/build.sh armhf    # build/armhf/{kennel,kennel-read,kennel-term,kennel-calc,kennel-edit,kennel-music}, armv7-a hard float, static libstdc++
 scripts/build.sh all
 ```
 
-`armhf` first runs `scripts/sysroot.sh`, which assembles `build/sysroot-armhf` from Debian trixie armhf packages (glibc, libstdc++ 14, SDL3 3.2, SDL3_ttf 3.2, ALSA, zlib); the package index signature is checked with `debian-archive-keyring` when installed, packages by SHA256. `kennel` links only glibc, SDL3, SDL3_ttf and ALSA dynamically, `kennel-read`, `kennel-term`, `kennel-calc` and `kennel-edit` glibc, SDL3, SDL3_ttf and zlib. After the build, every undefined dynamic symbol of the five binaries is checked against the libraries of the goodluckOS rootfs in `GLOS_ROOT` when it is set (an extracted goodluckOS root file system); a missing symbol fails the build. CMake options: `KENNEL_ALSA` (default on), `KENNEL_STATIC_CXX` (default off, on for `armhf`).
+`armhf` first runs `scripts/sysroot.sh`, which assembles `build/sysroot-armhf` from Debian trixie armhf packages (glibc, libstdc++ 14, SDL3 3.2, SDL3_ttf 3.2, ALSA, zlib); the package index signature is checked with `debian-archive-keyring` when installed, packages by SHA256. `kennel` links only glibc, SDL3, SDL3_ttf and ALSA dynamically, `kennel-read`, `kennel-term`, `kennel-calc`, `kennel-edit` and `kennel-music` glibc, SDL3, SDL3_ttf and zlib. After the build, every undefined dynamic symbol of the six binaries is checked against the libraries of the goodluckOS rootfs in `GLOS_ROOT` when it is set (an extracted goodluckOS root file system); a missing symbol fails the build. CMake options: `KENNEL_ALSA` (default on), `KENNEL_STATIC_CXX` (default off, on for `armhf`).
 
 ## Run on the host
 
@@ -82,7 +82,7 @@ scripts/build.sh armhf
 scripts/stage-glos.sh        # build/stage-glos, build/kennel-glos.zip, build/kennel-fonts.zip
 ```
 
-Unzip `kennel-glos.zip` into the HOME root (MTP: `GA36MB -> HOME`). It contains `ports/kennel/` (`kennel`, `kennel-read`, `kennel-term`, `kennel-calc`, `kennel-edit`, `kennel-run`, assets, `platforms/goodluckos.ini`), the Books, Terminal, Calculator, Text editor and kennel entries in `.local/share/applications/` (`books.puppy`, `terminal.puppy`, `calculator.puppy`, `editor.puppy`, `kennel.puppy`) and an empty `books/` folder. `kennel-fonts.zip` is optional and is unzipped the same way: the reading fonts beyond Literata, Inter and Atkinson (Alegreya, Bitter, Charis SIL, Crimson Pro, EB Garamond, Lora, Merriweather, PT Serif, Source Serif) in `ports/kennel/assets/fonts/read/`. Make kennel the launcher in one of two ways:
+Unzip `kennel-glos.zip` into the HOME root (MTP: `GA36MB -> HOME`). It contains `ports/kennel/` (`kennel`, `kennel-read`, `kennel-term`, `kennel-calc`, `kennel-edit`, `kennel-music`, `kennel-run`, assets, `platforms/goodluckos.ini`), the Books, Terminal, Calculator, Text editor, Music and kennel entries in `.local/share/applications/` (`books.puppy`, `terminal.puppy`, `calculator.puppy`, `editor.puppy`, `music.puppy`, `kennel.puppy`) and empty `books/` and `music/` folders. `kennel-fonts.zip` is optional and is unzipped the same way: the reading fonts beyond Literata, Inter and Atkinson (Alegreya, Bitter, Charis SIL, Crimson Pro, EB Garamond, Lora, Merriweather, PT Serif, Source Serif) in `ports/kennel/assets/fonts/read/`. Make kennel the launcher in one of two ways:
 
 - start it once from Puppy (System > kennel, from `kennel.puppy`) and set Settings > Launcher at boot to kennel;
 - copy `tools/launcher-glos.sh` to `HOME/.local/launcher.sh`.
@@ -103,7 +103,7 @@ Changed files are pushed into `HOME/ports/.kennel-incoming` and then renamed int
 
 `scripts/testbooks.sh` fills `build/testbooks`: Project Gutenberg books (War and Peace as EPUB and TXT, Pride and Prejudice as EPUB, TXT and single-file HTML with images, R.U.R. by Karel Capek in Czech as EPUB and TXT) and, generated from the Pride and Prejudice text by `scripts/mkbooks.py` (calibre is not needed), FB2, PalmDOC PDB (compressed and uncompressed) and an uncompressed UTF-8 MOBI.
 
-Host screenshots without a display: `KENNEL_AUTOMATE` runs comma-separated tokens, one every 300 ms; with `SDL_VIDEODRIVER=offscreen` no window is needed.
+Host screenshots without a display: `KENNEL_AUTOMATE` runs comma-separated tokens, one every 300 ms; with `SDL_VIDEODRIVER=offscreen` no window is needed, with `SDL_AUDIODRIVER=dummy` kennel-music plays in real time without sound.
 
 | Token | Effect |
 |---|---|
@@ -235,6 +235,25 @@ Menu: Save, Save as, Find, Replace, Word wrap, Font size (10 to 20), Controls, C
 
 Closing with unsaved changes asks Save, Discard or Cancel (Cancel preselected). SIGTERM (appd stop, START+SELECT) or SIGHUP with unsaved changes writes the buffer to the recovery folder (first line the path) and exits; opening the same path again (or an untitled buffer) offers Restore or Discard. A save or Discard removes the recovery file.
 
+## kennel-music
+
+Album player, opened from Files (an audio file), the Tools category (`music.puppy`, library `~/music` and `/media/external/music`) or directly. Launched like an app (kennel restarts when it closes), no play session; playback stops when it closes.
+
+```
+kennel-music [--library DIR[;DIR...]]   album list of the folders (default ~/music)
+kennel-music FILE|FOLDER                plays the album of FILE, from FILE, or FOLDER from its first track
+kennel-music --probe FILE...            decodes the files and prints rate, channels, reported and decoded length
+```
+
+An album is a folder with at least one audio file (`mp3`, `ogg`/`oga` Vorbis, `flac`, `wav`): its audio files in natural order (case-insensitive, numbers by value, so `2` before `10`), hidden files skipped. The album list holds every such folder up to four levels below the library folders, named by the path below the library folder (`Artist/Album`); tracks directly in a library folder form an album named after that folder. The cover is `cover`, `folder`, `front`, `album` or `albumart` with `.jpg`, `.jpeg`, `.png` or `.bmp` (case-insensitive), else the only image in the folder. Track titles are the file names without extension.
+
+| Screen | Buttons |
+|---|---|
+| Album list | Up/Down select, A play the album from its first track, B exit |
+| Player | Up/Down move the list cursor; A on the playing track play/pause, on another track play it; Left/L1 previous (restarts the track after 3 s), Right/R1 next (both circular, the pause state is kept); Y loop: No loop, Loop album, Loop track (remembered); B back to the album list, or exit when opened with a file or folder |
+
+At the end of a track the next one starts without a gap; Loop track repeats it, Loop album continues with the first track after the last; without loop the album stops after the last track, paused at the first. A file that cannot be decoded is skipped and greyed out. The player shows the cover, album, `Track N of M`, title, progress with elapsed time and length, play state and loop mode; the list cursor follows the playing track unless it was moved away from it.
+
 ## File browser
 
 Files in the dock and quick settings starts in HOME (Expert > Files in `/`). Folders first, sorted by name; `..` goes up.
@@ -247,7 +266,7 @@ Files in the dock and quick settings starts in HOME (Expert > Files in `/`). Fol
 | Y | HOME |
 | START | close |
 
-A file opens with its library entry (an archive file the catalog lists), else with the `[ARCHIVE]` whose `ENTRY_EXTENSIONS` contain its extension (archives whose `ENTRY_DIRECTORIES` hold the file first; with several, a dialog offers up to two plus View), books with kennel-read, images (`png`, `jpg`, `bmp`, `gif` first frame, `qoi`) in the image viewer, text files (no NUL byte in the first 8 KiB) in the text viewer (first 512 KiB); when the Open with dialog is shown for a text file it also offers Edit (kennel-edit) while it has fewer than four buttons. In expert mode executable files and `.sh` scripts can be run in kennel-term. Copy, move across file systems and delete of folders run `cp -r`, `mv` and `rm -rf` on a worker thread; names that exist get a ` (2)` suffix. Rename and New folder use the on-screen keyboard (B delete, X space, Y clear, L1/R1 move the cursor, START done, SELECT cancel). A file browser that was open when an app started is reopened at the same folder and file when kennel returns.
+A file opens with its library entry (an archive file the catalog lists), else with the `[ARCHIVE]` whose `ENTRY_EXTENSIONS` contain its extension (archives whose `ENTRY_DIRECTORIES` hold the file first; with several, a dialog offers up to two plus View), books with kennel-read, images (`png`, `jpg`, `bmp`, `gif` first frame, `qoi`) in the image viewer, audio files (`mp3`, `ogg`, `oga`, `flac`, `wav`) in kennel-music (the folder is the album, playback starts with the file), text files (no NUL byte in the first 8 KiB) in the text viewer (first 512 KiB); when the Open with dialog is shown for a text file it also offers Edit (kennel-edit) while it has fewer than four buttons. In expert mode executable files and `.sh` scripts can be run in kennel-term. Copy, move across file systems and delete of folders run `cp -r`, `mv` and `rm -rf` on a worker thread; names that exist get a ` (2)` suffix. Rename and New folder use the on-screen keyboard (B delete, X space, Y clear, L1/R1 move the cursor, START done, SELECT cancel). A file browser that was open when an app started is reopened at the same folder and file when kennel returns.
 
 The image viewer steps through the images of the folder (in the listing's order, hidden files as shown):
 
@@ -255,6 +274,7 @@ The image viewer steps through the images of the folder (in the listing's order,
 |---|---|
 | Left/Right, L1/R1 | previous/next image, circular; held, it stops at the first and last |
 | X | actions: Set as wallpaper, Delete (asks first; the viewer moves to the next image and closes after the last), Info (path, pixels, size) |
+| Y | full screen: the image on black over the whole screen, no header, top or bottom bar; Left/Right, L1/R1 and X work as outside it; Y, A or B return |
 | A, B | close; Files selects the image shown last |
 
 The header shows the position, pixel size and file size, or `Image too large` (over 16 megapixels) or `Cannot open the image`. JPEG EXIF orientation is applied, also to the wallpaper. Images are decoded on a worker thread, the current one first, then its neighbours; the previous image stays dimmed until the new one is decoded (a 12 MP JPEG takes about 2 s on the GA36-MB).
@@ -269,13 +289,14 @@ The header shows the position, pixel size and file size, or `Image too large` (o
 | `$XDG_CACHE_HOME/kennel/titles.tsv` | e-book titles and authors, keyed by path, size and mtime; rewritten on catalog load with the books found |
 | `$XDG_CACHE_HOME/kennel/wallpaper.qoi`, `wallpaper.key` | wallpaper scaled to the screen, keyed by path, size and mtime |
 | `kennel-backup/` on the external card, else in HOME | backup: `config/` and `data/` copies of the two directories above, `backup.ini` (version, time, boot, uptime, session count) |
-| `$XDG_RUNTIME_DIR/kennel/`, else `/dev/shm/kennel-UID`, else `/tmp/kennel-UID` | `state` (row and entry, open file browser), `kennel.log`, `kennel-read.log`, `kennel-term.log`, `kennel-calc.log`, `kennel-edit.log` |
+| `$XDG_RUNTIME_DIR/kennel/`, else `/dev/shm/kennel-UID`, else `/tmp/kennel-UID` | `state` (row and entry, open file browser), `kennel.log`, `kennel-read.log`, `kennel-term.log`, `kennel-calc.log`, `kennel-edit.log`, `kennel-music.log` |
 | `$XDG_CONFIG_HOME/kennel/read.ini` | kennel-read settings |
 | `$XDG_DATA_HOME/kennel/read/positions.tsv` | kennel-read reading positions and reading time, per book path |
 | `$XDG_DATA_HOME/kennel/fonts/` | kennel-read user fonts, `<Family>-<Style>.ttf` |
 | `$XDG_CONFIG_HOME/kennel/term.ini` | kennel-term settings (`font_size`) |
 | `$XDG_CONFIG_HOME/kennel/calc.ini` | kennel-calc state: `mode` (`basic`, `scientific`), `angle` (`deg`, `rad`), `memory`, `ans` |
 | `$XDG_CONFIG_HOME/kennel/edit.ini` | kennel-edit settings: `wrap` (`0`, `1`), `font_size` |
+| `$XDG_CONFIG_HOME/kennel/music.ini` | kennel-music settings: `loop` (`off`, `album`, `track`) |
 | `$XDG_DATA_HOME/kennel/edit/recovery/` | kennel-edit unsaved buffers, one file per path (FNV-1a hash), first line the path |
 | next to the binary (symlinks in the CMake build directory), or `KENNEL_ASSETS` | `assets/` (fonts, reading fonts in `fonts/read`, icons, `term/shrc`), `platforms/`, `kennel-run` |
 
@@ -348,4 +369,6 @@ Battery history: kennel appends a sample to `battery.tsv` every minute and when 
 | Lucide icons (`assets/icons`) | ISC |
 | stb_image (`third_party/stb_image.h`) | public domain / MIT |
 | QOI (`third_party/qoi.h`) | MIT |
+| dr_mp3, dr_flac, dr_wav (`third_party/dr_*.h`) | public domain / MIT No Attribution |
+| stb_vorbis (`third_party/stb_vorbis.c`) | public domain / MIT |
 | SDL3, SDL3_ttf, zlib | zlib |

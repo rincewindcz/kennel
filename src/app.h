@@ -29,6 +29,7 @@ public:
     virtual void draw() = 0;
     virtual bool overlay() const { return false; }
     virtual bool showDock() const { return false; }
+    virtual bool fullscreen() const { return false; }  // no top and bottom bars while it is on top
     virtual std::vector<Hint> hints() const { return {}; }
     virtual std::string title() const { return {}; }
     virtual void resumed() {}
@@ -95,6 +96,8 @@ public:
     void openCalculator();
     // kennel-edit on path; a path that does not exist is created on the first save.
     void openEditor(const std::string& path);
+    // kennel-music on an audio file: its folder is the album, playback starts with it.
+    void openMusic(const std::string& path);
 
     Catalog catalog;
     Stats stats;

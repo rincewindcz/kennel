@@ -26,6 +26,7 @@ Non-goals: scraping (the device has no network), video previews, touch input.
 | Images | stb_image (PNG, JPEG, BMP) on a worker thread; QOI disk cache | no SDL3_image dependency; the device's SDL3_image build differs from Debian's |
 | Shapes | 9-grid textures with analytic anti-aliased masks (rounded rects, rings, soft shadows; shadow blur rounded to 4 px steps so few masks exist), vertex-colour gradients, background glow from one 64x64 radial texture | no extra library, sharp at any size; a large shadow mask cost about 40 ms to build on the device |
 | Audio mixer | libasound simple mixer (optional, `KENNEL_ALSA`) | volume, mute, speaker switch |
+| Audio decoding | dr_mp3, dr_flac, dr_wav, stb_vorbis (single headers, compiled into kennel-music only); playback through an SDL3 audio stream | the device has no libmpg123, libvorbis or libFLAC; its SDL2_mixer cannot be used with SDL3 |
 | Icons | Lucide (ISC) SVGs rasterized to white PNGs at 20 and 32 px by `scripts/icons.sh`, tinted at draw time | no SVG code on the device |
 | Fonts | Inter Regular, SemiBold, Bold; JetBrains Mono for logs; platform fallback fonts for CJK; kennel-read: Literata, Inter, Atkinson in Regular, Italic, Bold, BoldItalic (`assets/fonts/read`), nine more in the optional `kennel-fonts.zip`, user fonts in `DATA/fonts` | the device has no monospace font; reading fonts are static styles, subset to Latin, Greek, Cyrillic and punctuation with layout tables dropped by `scripts/fonts.sh` (from google/fonts, variable fonts instanced; Literata and Inter subset in place); the core set keeps the package small |
 | Books | zlib for EPUB (zip, deflate); own tolerant markup tokenizer for XHTML, OPF, NCX, FB2 and MOBI HTML | zlib is on the device; no XML library needed for broken markup |
@@ -279,7 +280,7 @@ Tweens (`anim::Tween`) animate floats with `outCubic` or `inOutQuad`; durations 
 
 ```
 CMakeLists.txt, cmake/armhf-linux.cmake
-src/                       kennelcore (static library shared with kennel-read, kennel-term, kennel-calc and kennel-edit): anim, util,
+src/                       kennelcore (static library shared with kennel-read, kennel-term, kennel-calc, kennel-edit and kennel-music): anim, util,
                            ini, paths, platform, settings, image, gfx, input, menu, glyphs, osk, zip,
                            tokenizer, cover
   main.cpp                 entry point
@@ -308,11 +309,13 @@ src/                       kennelcore (static library shared with kennel-read, k
   calc/                    kennel-calc: tokens, evaluator and number format (eval.*), keypad screen (calc.*)
   edit/                    kennel-edit: lines, cursor, load, save, find, replace (buffer.*), screen, modes,
                            word wrap, dialogs, recovery (edit.*)
-third_party/               stb_image.h, qoi.h
+  music/                   kennel-music: decoders (decoder.*), playback engine and feeder thread (player.*),
+                           album list and player screen (music.*)
+third_party/               stb_image.h, qoi.h, dr_mp3.h, dr_flac.h, dr_wav.h, stb_vorbis.c
 assets/                    fonts (reading fonts in fonts/read), icons (svg sources, 20 and 32 px PNGs),
                            term/shrc (kennel-term prompt)
-platforms/                 goodluckos.ini, goodluckos/{books,terminal,calculator,editor}.puppy (Books, Terminal, Calculator
-                           and Text editor entries)
+platforms/                 goodluckos.ini, goodluckos/{books,terminal,calculator,editor,music}.puppy (Books, Terminal,
+                           Calculator, Text editor and Music entries)
 tools/                     kennel-run, launcher-glos.sh, padinject.c (device test input)
 scripts/                   sysroot.sh, build.sh, icons.sh, fonts.sh, testroot.sh, stage-glos.sh, deploy-glos.sh,
                            testbooks.sh, mkbooks.py (FB2, PalmDOC and MOBI test books)
@@ -388,9 +391,9 @@ Measured on the device: 13 px font, 8x18 px cells, 80x13 with the keyboard and 8
 
 ## 16. File browser
 
-`FileScreen` on kennel's screen stack. Listing with `opendir`/`stat` (links followed, flagged), sorted folders first. Opening goes through `Catalog::entriesForFile`, which reuses the `[ARCHIVE]` rules recorded while loading the catalog (extensions, expanded directories, command template); the launched entry has the id `rom:<path>`, so statistics of files outside the library directories are kept per path. Long operations (`cp -r`, `mv` across file systems, `rm -rf`) run on a thread with a modal panel; rename, same file system moves, single file deletes and `mkdir` are direct system calls. `App::saveState` appends `files<TAB>dir<TAB>name` for an open browser; start-up reopens it. Edit and New file launch kennel-edit through `App::openEditor` (id `tool:editor`).
+`FileScreen` on kennel's screen stack. Listing with `opendir`/`stat` (links followed, flagged), sorted folders first. Opening goes through `Catalog::entriesForFile`, which reuses the `[ARCHIVE]` rules recorded while loading the catalog (extensions, expanded directories, command template); the launched entry has the id `rom:<path>`, so statistics of files outside the library directories are kept per path. Long operations (`cp -r`, `mv` across file systems, `rm -rf`) run on a thread with a modal panel; rename, same file system moves, single file deletes and `mkdir` are direct system calls. `App::saveState` appends `files<TAB>dir<TAB>name` for an open browser; start-up reopens it. Edit and New file launch kennel-edit through `App::openEditor` (id `tool:editor`); audio files without a library entry launch kennel-music through `App::openMusic` (id `tool:music`).
 
-Image viewer (`ImageScreen` in `files.cpp`): the browser passes the image paths of its listing and the chosen index. One worker thread takes paths from a queue: `imageInfo` (header only; over `kMaxImagePixels`, 16 M, is not decoded), `loadImage`, `contain` into the image area (width and height swapped for EXIF orientations 5 to 8), `orient`; results go to the main thread with `SDL_EVENT_USER` and are uploaded in `update()`. A new index replaces the queue with the current image, so a held button decodes only where it stops; the neighbours are queued once the current image is in. Textures are kept for the current image, its neighbours and the one fading out (220 ms with an 8 px slide in the direction of travel). `imageOrientation` reads tag 0x0112 from the Exif IFD0 in the first 64 KiB of a JPEG (both byte orders); the wallpaper applies it too. Measured on the device (2026-11-24): a 12 MP JPEG shows about 2 s after the press, the decode takes about 85 MB transiently.
+Image viewer (`ImageScreen` in `files.cpp`): the browser passes the image paths of its listing and the chosen index. One worker thread takes paths from a queue: `imageInfo` (header only; over `kMaxImagePixels`, 16 M, is not decoded), `loadImage`, `contain` into the whole screen, upscaled at most 4x (width and height swapped for EXIF orientations 5 to 8), `orient`; results go to the main thread with `SDL_EVENT_USER` and are uploaded in `update()`. A new index replaces the queue with the current image, so a held button decodes only where it stops; the neighbours are queued once the current image is in. Outside full screen the texture is drawn scaled down into the image area, so switching (Y, 200 ms between the two rectangles, header fading, `Screen::fullscreen()` hides the top and bottom bars) needs no new decode. Textures are kept for the current image, its neighbours and the one fading out (220 ms with an 8 px slide in the direction of travel). `imageOrientation` reads tag 0x0112 from the Exif IFD0 in the first 64 KiB of a JPEG (both byte orders); the wallpaper applies it too. Measured on the device (2026-11-24): a 12 MP JPEG shows about 2 s after the press, the decode takes about 85 MB transiently.
 
 ## 17. Backup
 
@@ -426,4 +429,17 @@ Separate binary, launched like kennel-term with the id `tool:editor`. Start-up a
 | Find | byte search per line, ASCII case folding, wraps around the file; matches of the visible lines highlighted (current one stronger) |
 | Modes | Type, Navigate, Find, Review (replace), Save as; Menu, Help and the dialogs are drawn over the mode below. The on-screen keyboard leaves Y, L1, R1 and SELECT to the editor |
 | Recovery | SDL turns SIGTERM into a quit event; SIGHUP is re-raised as SIGTERM. On quit with changes the buffer goes to `edit/recovery/<fnv1a(path) hex>` (first line the path, written atomically); start-up offers Restore or Discard when the first line matches |
+
+## 20. kennel-music
+
+Separate binary, launched like kennel-calc with the id `tool:music`, same start-up (`kennel.ini` for the accent colour and the confirm button, no animations, a second frame after gamepad init). While playing, the loop polls the player every 250 ms and redraws when the second, track or play state changes; paused or in the album list it draws nothing while idle.
+
+| Part | Implementation |
+|---|---|
+| Decoders | `Decoder` per format, interleaved float output: dr_mp3 (length from the Xing/Info header minus encoder delay and padding, else estimated from the first frame's bitrate and the stream size; counting frames would read the whole file), dr_flac (Ogg FLAC disabled), dr_wav, stb_vorbis (pull API only) |
+| Output | one `SDL_AudioStream` bound to the default playback device at 44.1 kHz stereo float; each track goes through its own conversion stream to that format, so the device stream holds one format and its queued bytes convert to frames |
+| Feeder | one thread keeps about 1 s queued (2048-frame chunks, woken every 250 ms while playing, idle when paused and full). At the end of a track it opens the next one (loop mode decides) and keeps feeding, so tracks follow without a gap. Requests from the screen (play, skip, a new album) are carried out by the feeder: clear the stream, open the track (with the lock released), on failure try the following tracks once round the album |
+| Position | `fed` frames put into the device stream since the last clear; each track appends a segment (track, first frame, length); played = fed minus queued; the current segment is the last one that has started, a `-1` segment marks the end of the album. After the end has played out the first track is loaded paused |
+| Pause | `SDL_PauseAudioStreamDevice`; the queue stays, so position and resume are exact |
+| Screen | cover 160 px (`cover`, rounded corners), album, track, progress and times, play state and loop mode, the track list below (32 px rows), hint bar |
 

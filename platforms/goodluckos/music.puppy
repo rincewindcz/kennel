@@ -1,0 +1,6 @@
+# Music player for album folders. Installed to ~/.local/share/applications/music.puppy.
+[ENTRY]
+CATEGORY=Tools
+NAME=Music
+DESCRIPTION=Plays album folders from ~/music and the TF card
+COMMAND=/home/player/ports/kennel/kennel-music --library "/home/player/music;/media/external/music"

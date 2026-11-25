@@ -386,6 +386,8 @@ void App::openCalculator() { launchTool("kennel-calc", "Calculator"); }
 
 void App::openEditor(const std::string& path) { launchTool("kennel-edit", "Editor", " " + shellQuote(path)); }
 
+void App::openMusic(const std::string& path) { launchTool("kennel-music", "Music", " " + shellQuote(path)); }
+
 void App::reportLastSession() {
     const Session* s = stats.newSession();
     if (!s || !settings.reportErrors || s->unknown || s->killed) return;
@@ -709,8 +711,10 @@ void App::frame() {
         stack_[i]->update();
         stack_[i]->draw();
     }
-    drawTopBar();
-    drawBottomBar();
+    if (Screen* s = top(); !s || !s->fullscreen()) {
+        drawTopBar();
+        drawBottomBar();
+    }
     drawToast();
     drawLaunch();
     drawPerf();

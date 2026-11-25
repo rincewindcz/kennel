@@ -34,6 +34,7 @@ struct Clipboard {
 const char* kBookExts[] = {"epub", "pdb", "mobi", "prc", "fb2", "html", "htm", "xhtml"};
 const char* kImageExts[] = {"png", "jpg", "jpeg", "bmp", "gif", "qoi"};
 const char* kTextExts[] = {"txt", "log", "ini", "cfg", "conf", "sh", "md", "json", "xml", "lua", "py", "puppy", "csv", "tsv"};
+const char* kAudioExts[] = {"mp3", "ogg", "oga", "flac", "wav"};
 const char* kArchiveExts[] = {"zip", "7z", "rar", "tar", "gz", "xz", "bz2"};
 
 template <size_t N>
@@ -90,13 +91,14 @@ std::string freeName(const std::string& dir, const std::string& name) {
 
 // Image viewer over the images of a folder. A worker thread decodes and fits the current image, then
 // its neighbours; the main thread uploads the results. Textures are kept for the current image, its
-// neighbours and the image still fading out.
+// neighbours and the image still fading out. Images are fitted to the whole screen and drawn smaller
+// outside full screen.
 class ImageScreen : public Screen {
 public:
     ImageScreen(std::vector<std::string> paths, int index, std::function<void(const std::string&)> closed)
         : paths_(std::move(paths)), index_(index), closed_(std::move(closed)) {
         boxW_ = (int)gfx.W;
-        boxH_ = (int)(gfx.H - kTop - kBottom - 12);
+        boxH_ = (int)gfx.H;
         worker_ = std::thread([this] { work(); });
         request();
     }
@@ -120,8 +122,14 @@ public:
             case Key::X:
                 if (!ev.repeat) showActions();
                 break;
+            case Key::Y:
+                if (!ev.repeat) setFullscreen(!full_);
+                break;
             case Key::Back:
-            case Key::Confirm: leave(); break;
+            case Key::Confirm:
+                if (full_) setFullscreen(false);
+                else leave();
+                break;
             default: break;
         }
     }
@@ -154,37 +162,45 @@ public:
             h.push_back({Key::R1, "Next"});
         }
         h.push_back({Key::X, "Actions"});
+        h.push_back({Key::Y, "Full screen"});
         h.push_back({Key::Back, "Back"});
         return h;
     }
     std::string title() const override { return "Image"; }
+    bool fullscreen() const override { return full_; }
     void draw() override {
-        float t = shown.value;
+        float t = shown.value, f = fullFade_.update();
         drawBackground(t);
+        if (f > 0) gfx.fill({0, 0, gfx.W, gfx.H}, rgb(0, t * f));
         const std::string& path = paths_[index_];
         const Slot* cur = find(path);
-        std::string sub = strprintf("%d / %d", index_ + 1, (int)paths_.size());
-        if (cur && cur->srcW) sub += strprintf("  \xC2\xB7  %dx%d", cur->srcW, cur->srcH);
-        if (cur) sub += "  \xC2\xB7  " + formatBytes(cur->bytes);
-        if (cur && !cur->error.empty()) sub += "  \xC2\xB7  " + cur->error;
-        drawPageHeader("image", baseName(path), sub, t);
+        if (f < 1) drawHeader(path, cur, t * (1 - f));
 
-        float s = swap_.update(), avail = gfx.H - kTop - kBottom - 6;
+        // The image area: below the header and above the bottom bar, the whole screen at f = 1.
+        float top = kTop * (1 - f), avail = gfx.H - (kTop + kBottom + 6) * (1 - f);
+        float s = swap_.update();
         auto picture = [&](const std::string& p, float alpha, float dx) {
             const Slot* sl = find(p);
             if (!sl || !sl->tex || alpha <= 0) return;
-            gfx.image(sl->tex, {(gfx.W - sl->w) / 2 + dx, kTop + (avail - sl->h) / 2, sl->w, sl->h}, alpha);
+            float k = std::min({1.f, gfx.W / sl->w, avail / sl->h}), w = sl->w * k, h = sl->h * k;
+            gfx.image(sl->tex, {(gfx.W - w) / 2 + dx, top + (avail - h) / 2, w, h}, alpha);
         };
         float stale = shown_ == path ? 1.f : 0.35f;  // the image before, while the current one decodes
         if (s < 1) picture(from_, t * (1 - s), -swapDir_ * 8 * s);
         picture(shown_, t * s * stale, swapDir_ * 8 * (1 - s));
         if (cur && cur->ready && !cur->tex && shown_ == path)
-            gfx.text(Font::Small, cur->error, gfx.W / 2, kTop + avail / 2 - 10, fade(theme::dim, t * s), 0, Align::Center);
+            gfx.text(Font::Small, cur->error, gfx.W / 2, top + avail / 2 - 10, fade(theme::dim, t * s), 0, Align::Center);
         else if (shown_.empty())
-            gfx.text(Font::Small, "Loading", gfx.W / 2, kTop + avail / 2 - 10, fade(theme::dim, t), 0, Align::Center);
+            gfx.text(Font::Small, "Loading", gfx.W / 2, top + avail / 2 - 10, fade(theme::dim, t), 0, Align::Center);
     }
 
 private:
+    void setFullscreen(bool on) {
+        full_ = on;
+        fullFade_.go(on ? 1.f : 0.f, 0.2f);
+        app.dirty = true;
+    }
+
     struct Slot {
         SDL_Texture* tex = nullptr;
         float w = 0, h = 0;
@@ -198,6 +214,14 @@ private:
         Image img;
         int srcW = 0, srcH = 0;
     };
+
+    void drawHeader(const std::string& path, const Slot* cur, float t) {
+        std::string sub = strprintf("%d / %d", index_ + 1, (int)paths_.size());
+        if (cur && cur->srcW) sub += strprintf("  \xC2\xB7  %dx%d", cur->srcW, cur->srcH);
+        if (cur) sub += "  \xC2\xB7  " + formatBytes(cur->bytes);
+        if (cur && !cur->error.empty()) sub += "  \xC2\xB7  " + cur->error;
+        drawPageHeader("image", baseName(path), sub, t);
+    }
 
     static Result decode(const std::string& path, int boxW, int boxH) {
         Result r;
@@ -359,6 +383,8 @@ private:
     std::string shown_, from_;
     float swapDir_ = 1;
     anim::Tween swap_;
+    bool full_ = false;
+    anim::Tween fullFade_;
 
     std::thread worker_;
     std::mutex mutex_;
@@ -478,6 +504,10 @@ void FileScreen::openFile(const std::string& path) {
         return;
     }
     auto entries = app.catalog.entriesForFile(path);
+    if (entries.empty() && among(ext, kAudioExts) && fileExists(paths.exeDir + "/kennel-music")) {
+        app.openMusic(path);
+        return;
+    }
     if (entries.empty() && among(ext, kBookExts) && fileExists(paths.exeDir + "/kennel-read")) {
         Entry e;
         e.id = "rom:" + path;
@@ -804,6 +834,7 @@ void FileScreen::draw() {
                            : it.dir  ? "folder"
                            : among(ext, kBookExts) ? "book"
                            : among(ext, kImageExts) ? "image"
+                           : among(ext, kAudioExts) ? "music"
                            : among(ext, kArchiveExts) ? "file-archive"
                            : among(ext, kTextExts) ? "file-text"
                            : it.exec ? "terminal"

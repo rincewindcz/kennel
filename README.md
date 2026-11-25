@@ -16,7 +16,7 @@ keep working.
   play time and last played, favourites, hidden entries, quick settings (brightness, volume,
   output), power actions, a file browser, battery history, backup to the TF card, wallpaper and
   accent colours. Its image viewer steps through a folder's photos, upright by their EXIF
-  orientation.
+  orientation, also full screen.
 - **Expert mode**: live system status, logs, processes, library diagnostics, sessions, a
   performance overlay.
 - **kennel-read**: a small e-book reader for EPUB, FB2, MOBI/PDB, HTML and plain text. Scrolls by
@@ -29,6 +29,8 @@ keep working.
   (trigonometry, logarithms, powers and roots, factorial, combinations).
 - **kennel-edit**: a text editor with the on-screen keyboard. Word wrap, find and replace, keeps
   line endings, saves safely and keeps unsaved text when the app is stopped.
+- **kennel-music**: an album player for folders of MP3, OGG, FLAC or WAV files. Play and pause,
+  previous and next, loop the track or the album, gapless.
 
 Everything is C++20 on SDL3. kennel starts in about half a second on the A23 and draws nothing
 while idle.
@@ -82,4 +84,4 @@ Device integration (launch command, power actions, backlight, mixer, library sou
 
 MIT, see [LICENSE](LICENSE). Bundled fonts (Inter, JetBrains Mono and the reading fonts in
 `assets/fonts/read`, including the optional pack) are under the SIL Open Font License, Lucide icons
-under ISC, stb_image and QOI under MIT/public domain.
+under ISC, stb_image, stb_vorbis, QOI and dr_mp3, dr_flac, dr_wav under MIT/public domain.
