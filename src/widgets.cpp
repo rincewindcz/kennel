@@ -50,7 +50,9 @@ SDL_Texture* wallpaper() {
             logf("wallpaper %s: cannot decode", path.c_str());
             return nullptr;
         }
-        img = cover(src, (int)gfx.W, (int)gfx.H);
+        int o = imageOrientation(path);
+        img = o >= 5 ? cover(src, (int)gfx.H, (int)gfx.W) : cover(src, (int)gfx.W, (int)gfx.H);
+        orient(img, o);
         if (saveQoi(qoi, img)) writeFile(keyFile, key);
     }
     tex = gfx.texture(img);

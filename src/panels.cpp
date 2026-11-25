@@ -1,6 +1,7 @@
 #include "panels.h"
 
 #include "battery.h"
+#include "paths.h"
 #include "platform.h"
 #include "settings.h"
 #include "system.h"
@@ -94,6 +95,7 @@ QuickPanel::QuickPanel() : MenuPanel("Quick settings", {}, false) {
     m.push_back(items::header("GO TO"));
     m.push_back(items::link("folder", "Files", [] { app.openFiles(); }));
     m.push_back(items::link("chart-column", "Statistics", [] { app.openStatistics(); }));
+    if (fileExists(paths.exeDir + "/kennel-calc")) m.push_back(items::link("calculator", "Calculator", [] { app.openCalculator(); }));
     m.push_back(items::link("settings", "Settings", [] { app.openSettings(); }));
     if (settings.expert) {
         m.push_back(items::link("wrench", "Expert", [] { app.openExpert(); }));

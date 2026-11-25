@@ -1,0 +1,6 @@
+# Text editor for the gamepad. Installed to ~/.local/share/applications/editor.puppy.
+[ENTRY]
+CATEGORY=Tools
+NAME=Text editor
+DESCRIPTION=Edit text files with the on-screen keyboard
+COMMAND=/home/player/ports/kennel/kennel-edit

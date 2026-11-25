@@ -1,6 +1,7 @@
 #!/bin/bash
-# Copies build/stage-glos (kennel, kennel-read, kennel-term, the Books, Terminal and kennel entries) to a
-# goodluckOS device over the USB serial console (glos.py, root) and creates ~/books.
+# Copies build/stage-glos (kennel, kennel-read, kennel-term, kennel-calc, kennel-edit, the Books, Terminal,
+# Calculator, Text editor and kennel entries) to a goodluckOS device over the USB serial console (glos.py, root)
+# and creates ~/books.
 # Files whose md5 already matches on the device are skipped.
 # Usage: scripts/deploy-glos.sh [--launcher] [--fonts]
 #   --launcher  also installs tools/launcher-glos.sh as /home/player/.local/launcher.sh
@@ -27,7 +28,7 @@ done
 [[ -d $stage/ports/kennel && -d $fonts_stage/ports ]] || { echo "$stage missing, run scripts/stage-glos.sh" >&2; exit 1; }
 glos() { python3 "$glos_py" --port "$port" --timeout 300 "$@"; }
 # The device shell (busybox ash) has no brace expansion: list the entries here.
-entries=".local/share/applications/books.puppy .local/share/applications/terminal.puppy .local/share/applications/kennel.puppy"
+entries=".local/share/applications/books.puppy .local/share/applications/terminal.puppy .local/share/applications/calculator.puppy .local/share/applications/editor.puppy .local/share/applications/kennel.puppy"
 
 # md5 of what is already on the device; one short command, the console has a line limit.
 declare -A source=()
@@ -70,5 +71,5 @@ if ((launcher)); then
     glos sh "chmod 755 $home/.local/launcher.sh; chown player:player $home/.local/launcher.sh" >/dev/null
 fi
 
-glos sh "mkdir -p $home/books && cd $home && chown player:player books $entries && chown -R player:player $home/ports/kennel && chmod 755 $home/ports/kennel/kennel $home/ports/kennel/kennel-read $home/ports/kennel/kennel-term $home/ports/kennel/kennel-run" >/dev/null
+glos sh "mkdir -p $home/books && cd $home && chown player:player books $entries && chown -R player:player $home/ports/kennel && chmod 755 $home/ports/kennel/kennel $home/ports/kennel/kennel-read $home/ports/kennel/kennel-term $home/ports/kennel/kennel-calc $home/ports/kennel/kennel-edit $home/ports/kennel/kennel-run" >/dev/null
 echo "deployed to $home/ports/kennel"

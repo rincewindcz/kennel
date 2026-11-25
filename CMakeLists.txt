@@ -17,7 +17,7 @@ find_package(Threads REQUIRED)
 
 find_package(ZLIB REQUIRED)
 
-# Code shared by kennel, kennel-read and kennel-term.
+# Code shared by kennel, kennel-read, kennel-term, kennel-calc and kennel-edit.
 add_library(kennelcore STATIC
     src/zip.cpp
     src/tokenizer.cpp
@@ -71,6 +71,16 @@ add_executable(kennel-term ${TERM_SOURCES})
 target_include_directories(kennel-term PRIVATE src/term)
 target_link_libraries(kennel-term PRIVATE kennelcore)
 
+file(GLOB CALC_SOURCES CONFIGURE_DEPENDS src/calc/*.cpp)
+add_executable(kennel-calc ${CALC_SOURCES})
+target_include_directories(kennel-calc PRIVATE src/calc)
+target_link_libraries(kennel-calc PRIVATE kennelcore)
+
+file(GLOB EDIT_SOURCES CONFIGURE_DEPENDS src/edit/*.cpp)
+add_executable(kennel-edit ${EDIT_SOURCES})
+target_include_directories(kennel-edit PRIVATE src/edit)
+target_link_libraries(kennel-edit PRIVATE kennelcore)
+
 if(KENNEL_ALSA)
     find_path(ALSA_INCLUDE_DIR alsa/asoundlib.h REQUIRED)
     find_library(ALSA_LIBRARY asound REQUIRED)
@@ -83,6 +93,8 @@ if(KENNEL_STATIC_CXX)
     target_link_options(kennel PRIVATE -static-libstdc++ -static-libgcc)
     target_link_options(kennel-read PRIVATE -static-libstdc++ -static-libgcc)
     target_link_options(kennel-term PRIVATE -static-libstdc++ -static-libgcc)
+    target_link_options(kennel-calc PRIVATE -static-libstdc++ -static-libgcc)
+    target_link_options(kennel-edit PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 
 # Run from the build directory with the repository's data.
@@ -90,7 +102,7 @@ file(CREATE_LINK ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets SYMBOLIC)
 file(CREATE_LINK ${CMAKE_SOURCE_DIR}/platforms ${CMAKE_BINARY_DIR}/platforms SYMBOLIC)
 file(CREATE_LINK ${CMAKE_SOURCE_DIR}/tools/kennel-run ${CMAKE_BINARY_DIR}/kennel-run SYMBOLIC)
 
-install(TARGETS kennel kennel-read kennel-term DESTINATION .)
+install(TARGETS kennel kennel-read kennel-term kennel-calc kennel-edit DESTINATION .)
 install(PROGRAMS tools/kennel-run DESTINATION .)
 install(DIRECTORY assets/fonts assets/term DESTINATION assets)
 install(DIRECTORY assets/icons/20 assets/icons/32 DESTINATION assets/icons)

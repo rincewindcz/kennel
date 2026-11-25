@@ -92,6 +92,9 @@ public:
     void openLog(const std::string& title, const std::string& path);
     void openFiles(const std::string& dir = {}, const std::string& select = {});
     void openTerminal(const std::string& cwd = {}, const std::string& command = {});
+    void openCalculator();
+    // kennel-edit on path; a path that does not exist is created on the first save.
+    void openEditor(const std::string& path);
 
     Catalog catalog;
     Stats stats;
@@ -121,6 +124,8 @@ private:
     };
 
     std::vector<DockItem> dockItems() const;
+    // Runs <exe dir>/BINARY ARGS as an app with the id tool:<lowercase title> (no play session).
+    void launchTool(const std::string& binary, const std::string& title, const std::string& args = {});
     void dispatch(const KeyEvent& ev);
     void dockInput(const KeyEvent& ev);
     void frame();

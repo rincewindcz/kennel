@@ -1,0 +1,6 @@
+# Calculator for the gamepad, basic and scientific. Installed to ~/.local/share/applications/calculator.puppy.
+[ENTRY]
+CATEGORY=Tools
+NAME=Calculator
+DESCRIPTION=Basic and scientific calculator
+COMMAND=/home/player/ports/kennel/kennel-calc

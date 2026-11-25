@@ -2,8 +2,12 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <condition_variable>
 #include <cstring>
+#include <deque>
 #include <dirent.h>
+#include <map>
+#include <mutex>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -84,43 +88,285 @@ std::string freeName(const std::string& dir, const std::string& name) {
     }
 }
 
+// Image viewer over the images of a folder. A worker thread decodes and fits the current image, then
+// its neighbours; the main thread uploads the results. Textures are kept for the current image, its
+// neighbours and the image still fading out.
 class ImageScreen : public Screen {
 public:
-    explicit ImageScreen(std::string path) : path_(std::move(path)) {
-        Image img;
-        if (loadImage(path_, img)) {
-            size_ = strprintf("%dx%d", img.w, img.h);
-            Image fit = contain(img, (int)gfx.W, (int)(gfx.H - kTop - kBottom - 12), 4.f);
-            tex_ = gfx.texture(fit);
-            w_ = (float)fit.w;
-            h_ = (float)fit.h;
-        }
+    ImageScreen(std::vector<std::string> paths, int index, std::function<void(const std::string&)> closed)
+        : paths_(std::move(paths)), index_(index), closed_(std::move(closed)) {
+        boxW_ = (int)gfx.W;
+        boxH_ = (int)(gfx.H - kTop - kBottom - 12);
+        worker_ = std::thread([this] { work(); });
+        request();
     }
     ~ImageScreen() override {
-        if (tex_) SDL_DestroyTexture(tex_);
+        {
+            std::lock_guard lock(mutex_);
+            quit_ = true;
+        }
+        cv_.notify_one();
+        worker_.join();
+        for (auto& [path, slot] : slots_)
+            if (slot.tex) SDL_DestroyTexture(slot.tex);
     }
+
     void input(const KeyEvent& ev) override {
-        if (ev.key == Key::Back || ev.key == Key::Confirm) close();
-        else if (ev.key == Key::X && tex_ && !ev.repeat) app.setWallpaper(path_);
+        switch (ev.key) {
+            case Key::Left:
+            case Key::L1: step(-1, ev.repeat); break;
+            case Key::Right:
+            case Key::R1: step(1, ev.repeat); break;
+            case Key::X:
+                if (!ev.repeat) showActions();
+                break;
+            case Key::Back:
+            case Key::Confirm: leave(); break;
+            default: break;
+        }
+    }
+    void update() override {
+        std::deque<Result> done;
+        {
+            std::lock_guard lock(mutex_);
+            done.swap(results_);
+        }
+        if (done.empty()) return;
+        for (auto& r : done) {
+            if (std::find(paths_.begin(), paths_.end(), r.path) == paths_.end()) continue;
+            Slot& s = slot(r.path);
+            s.ready = true;
+            s.error = r.error;
+            s.srcW = r.srcW;
+            s.srcH = r.srcH;
+            if (!r.img.empty() && !s.tex) {
+                s.tex = gfx.texture(r.img);
+                s.w = (float)r.img.w;
+                s.h = (float)r.img.h;
+            }
+        }
+        changed();
     }
     std::vector<Hint> hints() const override {
-        if (!tex_) return {{Key::Back, "Back"}};
-        return {{Key::X, "Set as wallpaper"}, {Key::Back, "Back"}};
+        std::vector<Hint> h;
+        if (paths_.size() > 1) {
+            h.push_back({Key::L1, "Previous"});
+            h.push_back({Key::R1, "Next"});
+        }
+        h.push_back({Key::X, "Actions"});
+        h.push_back({Key::Back, "Back"});
+        return h;
     }
     std::string title() const override { return "Image"; }
     void draw() override {
         float t = shown.value;
         drawBackground(t);
-        drawPageHeader("image", baseName(path_), tex_ ? size_ : "Cannot open the image", t);
-        if (!tex_) return;
-        float top = kTop, avail = gfx.H - kTop - kBottom - 6;
-        gfx.image(tex_, {(gfx.W - w_) / 2, top + (avail - h_) / 2, w_, h_}, t);
+        const std::string& path = paths_[index_];
+        const Slot* cur = find(path);
+        std::string sub = strprintf("%d / %d", index_ + 1, (int)paths_.size());
+        if (cur && cur->srcW) sub += strprintf("  \xC2\xB7  %dx%d", cur->srcW, cur->srcH);
+        if (cur) sub += "  \xC2\xB7  " + formatBytes(cur->bytes);
+        if (cur && !cur->error.empty()) sub += "  \xC2\xB7  " + cur->error;
+        drawPageHeader("image", baseName(path), sub, t);
+
+        float s = swap_.update(), avail = gfx.H - kTop - kBottom - 6;
+        auto picture = [&](const std::string& p, float alpha, float dx) {
+            const Slot* sl = find(p);
+            if (!sl || !sl->tex || alpha <= 0) return;
+            gfx.image(sl->tex, {(gfx.W - sl->w) / 2 + dx, kTop + (avail - sl->h) / 2, sl->w, sl->h}, alpha);
+        };
+        float stale = shown_ == path ? 1.f : 0.35f;  // the image before, while the current one decodes
+        if (s < 1) picture(from_, t * (1 - s), -swapDir_ * 8 * s);
+        picture(shown_, t * s * stale, swapDir_ * 8 * (1 - s));
+        if (cur && cur->ready && !cur->tex && shown_ == path)
+            gfx.text(Font::Small, cur->error, gfx.W / 2, kTop + avail / 2 - 10, fade(theme::dim, t * s), 0, Align::Center);
+        else if (shown_.empty())
+            gfx.text(Font::Small, "Loading", gfx.W / 2, kTop + avail / 2 - 10, fade(theme::dim, t), 0, Align::Center);
     }
 
 private:
-    std::string path_, size_;
-    SDL_Texture* tex_ = nullptr;
-    float w_ = 0, h_ = 0;
+    struct Slot {
+        SDL_Texture* tex = nullptr;
+        float w = 0, h = 0;
+        int srcW = 0, srcH = 0;
+        uint64_t bytes = 0;
+        std::string error;
+        bool ready = false;
+    };
+    struct Result {
+        std::string path, error;
+        Image img;
+        int srcW = 0, srcH = 0;
+    };
+
+    static Result decode(const std::string& path, int boxW, int boxH) {
+        Result r;
+        r.path = path;
+        int w, h;
+        if (!imageInfo(path, w, h)) {
+            r.error = "Cannot open the image";
+            return r;
+        }
+        int o = imageOrientation(path);
+        r.srcW = o >= 5 ? h : w;
+        r.srcH = o >= 5 ? w : h;
+        Image src;
+        if ((long long)w * h > kMaxImagePixels) r.error = "Image too large";
+        else if (!loadImage(path, src)) r.error = "Cannot open the image";
+        if (!r.error.empty()) return r;
+        r.img = o >= 5 ? contain(src, boxH, boxW, 4.f) : contain(src, boxW, boxH, 4.f);
+        orient(r.img, o);
+        return r;
+    }
+
+    void work() {
+        while (true) {
+            std::string path;
+            {
+                std::unique_lock lock(mutex_);
+                cv_.wait(lock, [&] { return quit_ || !queue_.empty(); });
+                if (quit_) return;
+                path = std::move(queue_.front());
+                queue_.pop_front();
+                busy_ = path;
+            }
+            Result r = decode(path, boxW_, boxH_);
+            {
+                std::lock_guard lock(mutex_);
+                busy_.clear();
+                results_.push_back(std::move(r));
+            }
+            SDL_Event ev{};
+            ev.type = SDL_EVENT_USER;
+            SDL_PushEvent(&ev);
+        }
+    }
+
+    Slot& slot(const std::string& path) {
+        auto [it, added] = slots_.try_emplace(path);
+        if (added) {
+            struct stat st;
+            if (stat(path.c_str(), &st) == 0) it->second.bytes = (uint64_t)st.st_size;
+        }
+        return it->second;
+    }
+    const Slot* find(const std::string& path) const {
+        auto it = slots_.find(path);
+        return it == slots_.end() ? nullptr : &it->second;
+    }
+    int wrap(int i) const { return (i + (int)paths_.size()) % (int)paths_.size(); }
+
+    // The current image first; its neighbours once it is in. Only the settled image is waited for: a
+    // new index replaces the queue.
+    void request() {
+        std::vector<std::string> want{paths_[index_]};
+        if (slot(paths_[index_]).ready && paths_.size() > 1) {
+            want.push_back(paths_[wrap(index_ + 1)]);
+            want.push_back(paths_[wrap(index_ - 1)]);
+        }
+        {
+            std::lock_guard lock(mutex_);
+            queue_.clear();
+            for (const auto& p : want)
+                if (!slot(p).ready && p != busy_ && std::find(queue_.begin(), queue_.end(), p) == queue_.end()) queue_.push_back(p);
+        }
+        cv_.notify_one();
+    }
+
+    void changed() {
+        const std::string& path = paths_[index_];
+        if (slot(path).ready && shown_ != path) {
+            from_ = shown_;
+            shown_ = path;
+            swapDir_ = (float)dir_;
+            swap_.set(0);
+            swap_.go(1, 0.22f);
+        }
+        for (auto it = slots_.begin(); it != slots_.end();) {
+            const std::string& p = it->first;
+            bool keep = p == path || p == shown_ || (p == from_ && swap_.moving());
+            if (paths_.size() > 1) keep = keep || p == paths_[wrap(index_ + 1)] || p == paths_[wrap(index_ - 1)];
+            if (keep) {
+                ++it;
+                continue;
+            }
+            if (it->second.tex) SDL_DestroyTexture(it->second.tex);
+            it = slots_.erase(it);
+        }
+        request();
+        app.dirty = true;
+    }
+
+    void step(int dir, bool repeat) {
+        int n = (int)paths_.size(), i = index_ + dir;
+        if (n < 2 || (repeat && (i < 0 || i >= n))) return;
+        index_ = wrap(i);
+        dir_ = dir;
+        changed();
+    }
+
+    void showActions() {
+        std::string path = paths_[index_];
+        const Slot* cur = find(path);
+        std::vector<MenuItem> m;
+        if (cur && cur->tex) m.push_back(items::action("image", "Set as wallpaper", [path] { app.setWallpaper(path); }));
+        m.push_back(items::action("trash-2", "Delete", [this, path] { remove(path); }, true));
+        m.push_back(items::action("info", "Info", [this, path] { info(path); }));
+        app.push(std::make_unique<MenuPanel>(baseName(path), std::move(m)));
+    }
+
+    void remove(const std::string& path) {
+        app.confirm("trash-2", "Delete " + baseName(path) + "?", "The file is deleted.", "Delete", [this, path] {
+            if (unlink(path.c_str()) != 0) {
+                app.toast("Delete failed: " + std::string(strerror(errno)), "triangle-alert", theme::bad);
+                return;
+            }
+            auto it = std::find(paths_.begin(), paths_.end(), path);
+            if (it == paths_.end()) return;
+            int i = (int)(it - paths_.begin());
+            paths_.erase(it);
+            if (paths_.empty()) {
+                closed_({});
+                close();
+                return;
+            }
+            if (i < index_) --index_;
+            else if (index_ == (int)paths_.size()) index_ = 0;
+            dir_ = 1;
+            changed();
+        });
+    }
+
+    void info(const std::string& path) {
+        const Slot* cur = find(path);
+        std::string msg = tilde(path) + "\n";
+        if (cur && cur->srcW) msg += strprintf("%d x %d pixels\n", cur->srcW, cur->srcH);
+        if (cur) msg += formatBytes(cur->bytes) + strprintf(" (%llu bytes)", (unsigned long long)cur->bytes);
+        app.dialog("image", baseName(path), msg, {{"OK", nullptr}}, 0);
+    }
+
+    void leave() {
+        if (closing()) return;
+        closed_(baseName(paths_[index_]));
+        close();
+    }
+
+    std::vector<std::string> paths_;
+    int index_ = 0, dir_ = 1;
+    std::function<void(const std::string&)> closed_;
+    int boxW_ = 0, boxH_ = 0;
+    std::map<std::string, Slot> slots_;
+    std::string shown_, from_;
+    float swapDir_ = 1;
+    anim::Tween swap_;
+
+    std::thread worker_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    std::deque<std::string> queue_;
+    std::deque<Result> results_;
+    std::string busy_;
+    bool quit_ = false;
 };
 
 }  // namespace
@@ -216,7 +462,19 @@ void FileScreen::activate() {
 void FileScreen::openFile(const std::string& path) {
     std::string name = baseName(path), ext = extensionOf(name);
     if (among(ext, kImageExts)) {
-        app.push(std::make_unique<ImageScreen>(path));
+        std::vector<std::string> images;
+        int index = 0;
+        for (const auto& it : items_) {
+            if (it.dir || !among(extensionOf(it.name), kImageExts)) continue;
+            if (it.name == name) index = (int)images.size();
+            images.push_back(join(dir_, it.name));
+        }
+        if (images.empty()) images.push_back(path);
+        app.push(std::make_unique<ImageScreen>(std::move(images), index, [this](const std::string& shown) {
+            reload();
+            for (size_t i = 0; i < items_.size(); ++i)
+                if (!shown.empty() && items_[i].name == shown && !items_[i].parent) selected_ = (int)i;
+        }));
         return;
     }
     auto entries = app.catalog.entriesForFile(path);
@@ -251,6 +509,8 @@ void FileScreen::openFile(const std::string& path) {
         buttons[1].action();
         return;
     }
+    if (text && buttons.size() < 4 && fileExists(paths.exeDir + "/kennel-edit"))
+        buttons.insert(buttons.end() - 1, {"Edit", [path] { app.openEditor(path); }});
     struct stat st;
     bool exec = stat(path.c_str(), &st) == 0 && (st.st_mode & 0111);
     if (settings.expert && (exec || ext == "sh") && buttons.size() < 4) {
@@ -275,6 +535,8 @@ void FileScreen::showActions() {
         m.push_back(items::action(it->dir ? "folder-open" : "play", "Open", [this] { activate(); }));
         if (!it->dir && among(extensionOf(it->name), kImageExts))
             m.push_back(items::action("image", "Set as wallpaper", [path] { app.setWallpaper(path); }));
+        if (!it->dir && fileExists(paths.exeDir + "/kennel-edit") && looksLikeText(path))
+            m.push_back(items::action("file-pen", "Edit", [path] { app.openEditor(path); }));
         m.push_back(items::action("copy", "Copy", [path] {
             clipboard = {path, false};
             app.toast("Copied " + baseName(path), "copy");
@@ -293,6 +555,8 @@ void FileScreen::showActions() {
         m.push_back(items::action("info", "Info", [this] { info(); }));
     }
     m.push_back(items::action("folder-plus", "New folder", [this] { makeFolder(); }));
+    if (fileExists(paths.exeDir + "/kennel-edit"))
+        m.push_back(items::action("file-plus", "New file", [this] { makeFile(); }));
     m.push_back(items::action(hidden_ ? "eye-off" : "eye", hidden_ ? "Hide hidden files" : "Show hidden files", [this] {
         hidden_ = !hidden_;
         reload();
@@ -370,6 +634,22 @@ void FileScreen::makeFolder() {
             return;
         }
         open(dir_, name);
+    }));
+}
+
+void FileScreen::makeFile() {
+    std::string dir = dir_;
+    app.push(std::make_unique<TextInputScreen>("New file in " + tilde(dir), "", [dir](const std::string& name) {
+        if (name.empty()) return;
+        if (name.find('/') != std::string::npos || name == "." || name == "..") {
+            app.toast("Not a valid name", "triangle-alert", theme::warn);
+            return;
+        }
+        if (fileExists(join(dir, name))) {
+            app.toast(name + " already exists", "triangle-alert", theme::warn);
+            return;
+        }
+        app.openEditor(join(dir, name));
     }));
 }
 

@@ -362,20 +362,29 @@ void App::openFiles(const std::string& dir, const std::string& select) {
     push(std::make_unique<FileScreen>(dir, select));
 }
 
-void App::openTerminal(const std::string& cwd, const std::string& command) {
-    std::string exe = paths.exeDir + "/kennel-term";
+void App::launchTool(const std::string& binary, const std::string& title, const std::string& args) {
+    std::string exe = paths.exeDir + "/" + binary;
     if (!fileExists(exe)) {
-        toast("kennel-term is not installed", "triangle-alert", theme::bad);
+        toast(binary + " is not installed", "triangle-alert", theme::bad);
         return;
     }
     Entry e;
-    e.id = "tool:terminal";
-    e.title = "Terminal";
-    e.command = shellQuote(exe);
-    if (!cwd.empty()) e.command += " --cwd " + shellQuote(cwd);
-    if (!command.empty()) e.command += " -e " + shellQuote(command);
+    e.id = "tool:" + lower(title);
+    e.title = title;
+    e.command = shellQuote(exe) + args;
     launch(e);
 }
+
+void App::openTerminal(const std::string& cwd, const std::string& command) {
+    std::string args;
+    if (!cwd.empty()) args += " --cwd " + shellQuote(cwd);
+    if (!command.empty()) args += " -e " + shellQuote(command);
+    launchTool("kennel-term", "Terminal", args);
+}
+
+void App::openCalculator() { launchTool("kennel-calc", "Calculator"); }
+
+void App::openEditor(const std::string& path) { launchTool("kennel-edit", "Editor", " " + shellQuote(path)); }
 
 void App::reportLastSession() {
     const Session* s = stats.newSession();

@@ -1,8 +1,10 @@
 #!/bin/bash
 # Stages the armhf build for goodluckOS as a HOME tree in build/stage-glos and packs it as
-# build/kennel-glos.zip (unzip into the HOME root): kennel, kennel-read, kennel-term, the Books and
-# Terminal entries, the kennel entry for starting it from Puppy and an empty books folder. The launcher script is not included:
-# switch launchers in Settings > Launcher at boot, or install tools/launcher-glos.sh.
+# build/kennel-glos.zip (unzip into the HOME root): kennel, kennel-read, kennel-term, kennel-calc, kennel-edit,
+# the Books, Terminal, Calculator and Text editor entries, the kennel entry for starting it from Puppy and an
+# empty books folder.
+# The launcher script is not included: switch launchers in Settings > Launcher at boot, or install
+# tools/launcher-glos.sh.
 # Reading fonts other than the core families go to build/stage-glos-fonts, packed as build/kennel-fonts.zip
 # (also unzipped into the HOME root).
 set -euo pipefail
@@ -16,14 +18,16 @@ core_fonts=" Literata Inter Atkinson "
 bin=$repo/build/armhf/kennel
 reader=$repo/build/armhf/kennel-read
 term=$repo/build/armhf/kennel-term
+calc=$repo/build/armhf/kennel-calc
+edit=$repo/build/armhf/kennel-edit
 
-for b in "$bin" "$reader" "$term"; do
+for b in "$bin" "$reader" "$term" "$calc" "$edit"; do
     [[ -x $b ]] || { echo "$b missing, run scripts/build.sh armhf" >&2; exit 1; }
 done
 
 rm -rf "$stage" "$fonts_stage" "$repo/build/kennel-glos.zip" "$repo/build/kennel-fonts.zip"
 mkdir -p "$dest/assets/icons" "$dest/assets/fonts/read" "$dest/platforms" "$fonts_dest"
-install -m 0755 "$bin" "$reader" "$term" "$repo/tools/kennel-run" "$dest/"
+install -m 0755 "$bin" "$reader" "$term" "$calc" "$edit" "$repo/tools/kennel-run" "$dest/"
 cp "$repo"/assets/fonts/*.* "$dest/assets/fonts/"
 for f in "$repo"/assets/fonts/read/*; do
     family=$(basename "$f")
@@ -35,7 +39,7 @@ cp "$repo/assets/icons/LICENSE-lucide.txt" "$dest/assets/icons/"
 cp "$repo/assets/CONTRIBUTORS" "$dest/assets/"
 cp "$repo/platforms/goodluckos.ini" "$dest/platforms/"
 mkdir -p "$stage/.local/share/applications" "$stage/books"
-cp "$repo/platforms/goodluckos/"{books,terminal,kennel}.puppy "$stage/.local/share/applications/"
+cp "$repo/platforms/goodluckos/"{books,terminal,calculator,editor,kennel}.puppy "$stage/.local/share/applications/"
 
 (cd "$stage" && zip -qr "$repo/build/kennel-glos.zip" ports .local books)
 (cd "$fonts_stage" && zip -qr "$repo/build/kennel-fonts.zip" ports)

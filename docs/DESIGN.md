@@ -188,7 +188,7 @@ List tabs: up/down (wrapping on a fresh press), L2/R2 page, A opens Details of e
 
 ## 8. Quick settings (START)
 
-Panel from the right over dimmed Home: battery (level, estimated time left or until full), brightness (backlight levels 1 to max, sysfs, writable by group `video` on goodluckOS, persisted by `S90backlight`), volume, mute, output Speaker/Headphones, USB mode (as in Settings), then Files, Statistics, Settings, Expert and Terminal (expert mode), Screen off. The same side panel (`MenuPanel`) lists the file browser's actions.
+Panel from the right over dimmed Home: battery (level, estimated time left or until full), brightness (backlight levels 1 to max, sysfs, writable by group `video` on goodluckOS, persisted by `S90backlight`), volume, mute, output Speaker/Headphones, USB mode (as in Settings), then Files, Statistics, Calculator (when `kennel-calc` is installed), Settings, Expert and Terminal (expert mode), Screen off. The same side panel (`MenuPanel`) lists the file browser's actions.
 
 ## 9. Settings
 
@@ -279,7 +279,7 @@ Tweens (`anim::Tween`) animate floats with `outCubic` or `inOutQuad`; durations 
 
 ```
 CMakeLists.txt, cmake/armhf-linux.cmake
-src/                       kennelcore (static library shared with kennel-read and kennel-term): anim, util,
+src/                       kennelcore (static library shared with kennel-read, kennel-term, kennel-calc and kennel-edit): anim, util,
                            ini, paths, platform, settings, image, gfx, input, menu, glyphs, osk, zip,
                            tokenizer, cover
   main.cpp                 entry point
@@ -291,7 +291,7 @@ src/                       kennelcore (static library shared with kennel-read an
   paths.*, platform.*, settings.*
   catalog.*                .puppy parser, categories, art lookup
   stats.*                  journal, sessions, favorites
-  image.*, art.*           decoding, scaling, QOI cache, worker, stock cards
+  image.*, art.*           decoding, EXIF orientation, scaling, QOI cache, worker, stock cards
   system.*, procs.*        battery, backlight, mixer, mounts, USB; /proc sampler
   menu.*                   menu widget, menu items, scrollbar, accent colour
   glyphs.*                 glyph atlas text engine (reader and terminal text)
@@ -299,16 +299,20 @@ src/                       kennelcore (static library shared with kennel-read an
   widgets.*                menu page, dialog, text input, background, page header
   battery.*                battery history, estimate
   backup.*                 backup and restore of settings and data
-  files.*                  file browser, image viewer
+  files.*                  file browser, image viewer (carousel, decode worker)
   home.*, details.*, panels.*, menus.cpp, expert.*, statsview.cpp
   read/                    kennel-read: book model (book.*), format loaders (txt, epub, html, fb2, pdb),
                            text layout, reader screens
   term/                    kennel-term: escape sequence parser and screen (vt.*), pseudo terminal (pty.*),
                            suggestions (complete.*), terminal screen and modes (term.*)
+  calc/                    kennel-calc: tokens, evaluator and number format (eval.*), keypad screen (calc.*)
+  edit/                    kennel-edit: lines, cursor, load, save, find, replace (buffer.*), screen, modes,
+                           word wrap, dialogs, recovery (edit.*)
 third_party/               stb_image.h, qoi.h
 assets/                    fonts (reading fonts in fonts/read), icons (svg sources, 20 and 32 px PNGs),
                            term/shrc (kennel-term prompt)
-platforms/                 goodluckos.ini, goodluckos/{books,terminal}.puppy (Books and Terminal entries)
+platforms/                 goodluckos.ini, goodluckos/{books,terminal,calculator,editor}.puppy (Books, Terminal, Calculator
+                           and Text editor entries)
 tools/                     kennel-run, launcher-glos.sh, padinject.c (device test input)
 scripts/                   sysroot.sh, build.sh, icons.sh, fonts.sh, testroot.sh, stage-glos.sh, deploy-glos.sh,
                            testbooks.sh, mkbooks.py (FB2, PalmDOC and MOBI test books)
@@ -384,8 +388,42 @@ Measured on the device: 13 px font, 8x18 px cells, 80x13 with the keyboard and 8
 
 ## 16. File browser
 
-`FileScreen` on kennel's screen stack. Listing with `opendir`/`stat` (links followed, flagged), sorted folders first. Opening goes through `Catalog::entriesForFile`, which reuses the `[ARCHIVE]` rules recorded while loading the catalog (extensions, expanded directories, command template); the launched entry has the id `rom:<path>`, so statistics of files outside the library directories are kept per path. Long operations (`cp -r`, `mv` across file systems, `rm -rf`) run on a thread with a modal panel; rename, same file system moves, single file deletes and `mkdir` are direct system calls. `App::saveState` appends `files<TAB>dir<TAB>name` for an open browser; start-up reopens it.
+`FileScreen` on kennel's screen stack. Listing with `opendir`/`stat` (links followed, flagged), sorted folders first. Opening goes through `Catalog::entriesForFile`, which reuses the `[ARCHIVE]` rules recorded while loading the catalog (extensions, expanded directories, command template); the launched entry has the id `rom:<path>`, so statistics of files outside the library directories are kept per path. Long operations (`cp -r`, `mv` across file systems, `rm -rf`) run on a thread with a modal panel; rename, same file system moves, single file deletes and `mkdir` are direct system calls. `App::saveState` appends `files<TAB>dir<TAB>name` for an open browser; start-up reopens it. Edit and New file launch kennel-edit through `App::openEditor` (id `tool:editor`).
+
+Image viewer (`ImageScreen` in `files.cpp`): the browser passes the image paths of its listing and the chosen index. One worker thread takes paths from a queue: `imageInfo` (header only; over `kMaxImagePixels`, 16 M, is not decoded), `loadImage`, `contain` into the image area (width and height swapped for EXIF orientations 5 to 8), `orient`; results go to the main thread with `SDL_EVENT_USER` and are uploaded in `update()`. A new index replaces the queue with the current image, so a held button decodes only where it stops; the neighbours are queued once the current image is in. Textures are kept for the current image, its neighbours and the one fading out (220 ms with an 8 px slide in the direction of travel). `imageOrientation` reads tag 0x0112 from the Exif IFD0 in the first 64 KiB of a JPEG (both byte orders); the wallpaper applies it too. Measured on the device (2026-11-24): a 12 MP JPEG shows about 2 s after the press, the decode takes about 85 MB transiently.
 
 ## 17. Backup
 
 Settings > Backup. Location: `<external_mount>/kennel-backup` while the card is mounted (goodluckOS mounts it with `uid=1000`, writable by `player`), else `HOME/kennel-backup`. Back up now copies the config and data directories into `kennel-backup.tmp` with `cp -r`, writes `backup.ini` (version, wall time, boot id, uptime, session count), replaces `kennel-backup` with it and syncs. Restore (confirmation) replaces both directories with the backup's copies, syncs and restarts kennel (`App::restart`, `execv`). The art and wallpaper caches are rebuilt on demand and not backed up. "Last backup" shows the date when the clock was set at backup time and now, else the age within the same boot or "an earlier boot".
+
+## 18. kennel-calc
+
+Separate binary, launched like kennel-term with the id `tool:calculator` (`App::launchTool`), so no play session. Start-up as kennel-term: `kennel.ini` for the accent colour and the confirm button, no animations, nothing drawn while idle. KMSDRM does not scan out the first presented frame, so the frame after gamepad init is drawn as well (kennel does the same); with a single frame the panel kept showing the console. Measured on the device (2026-11-24): first frame at 370 to 410 ms, the `--eval` table of PLAN.md section 2.3 passes on armv7.
+
+| Part | Implementation |
+|---|---|
+| Expression | list of tokens as entered: digits, point and exponent marker as single tokens, functions with their `(`, so backspace removes `sin(` whole; `Number` tokens carry a value (Ans, MR, rand) |
+| Entry rules | after `=` a value starts a new expression, an operator or postfix continues from Ans; a second binary operator replaces the first (a minus after an operator starts a negative number); `±` removes or adds a unary minus before the last number |
+| Evaluation | lexer joins number tokens (`strtod`) and inserts implicit multiplication; recursive descent over `+ −`, `× ÷ mod nCr nPr`, unary minus, `^` and `ʸ√` (right associative), postfix; missing `)` implied; a term ending in `%` after `+` or `−` is a percentage of the left value |
+| Errors | syntax errors hide the live preview; domain errors (checked arguments, NaN), division by zero and overflow (infinity) are shown; degree trigonometry is exact at multiples of 90°, radian results within 1e-15 of the argument are 0 |
+| Format | 12 significant digits (`%.*f` or `%.11e`), trailing zeros dropped, U+2009 digit groups and U+2212 minus on screen; `--eval` prints plain ASCII |
+| Layout | display panel (mode tags, previous calculation, expression or result in 32 px, preview or error), 6-row key grid (basic 4 columns, scientific 9 with a gap between the blocks), hint bar |
+| State | `calc.ini`: mode, angle, memory written on change, Ans on exit (SDL turns SIGTERM into a quit event) |
+
+Inter has no glyphs for ∛ and ⌊⌋⌈⌉, so the keys read `³√x`, `floor` and `ceil`.
+
+## 19. kennel-edit
+
+Separate binary, launched like kennel-term with the id `tool:editor`. Start-up as kennel-calc (`kennel.ini` for the accent colour and the confirm button, no animations, a second frame after gamepad init); text is drawn with JetBrains Mono through `Glyphs`, the cell width is the advance of `M`. Measured on the device (2026-11-24): first frame at 476 ms (91 ms draw, glyph atlas).
+
+| Part | Implementation |
+|---|---|
+| Buffer | `std::vector<std::string>` lines without terminators; positions are line and byte offset at a code point boundary; insert splits on `\n` (a `\r` before it is dropped); no undo |
+| Load | `stat` first (over 1 MiB refused), majority line ending, BOM, final newline; NUL, invalid UTF-8 (overlongs and surrogates rejected) or no write access: read-only |
+| Save | temporary file in the target's folder, `fchmod` to the old mode (ignored on vfat), write, `fsync`, `rename`, folder `fsync`; `realpath` first so a symbolic link stays |
+| Layout | visual rows computed per line on demand (`rowsOf`): break after the last space within the column limit, else at the limit; tabs to multiples of 4 by logical column. Scrolling keeps the top as line and visual row; making the cursor visible walks at most one screen of rows, so cost does not grow with the file |
+| Cursor | up/down move by visual row and keep a goal column; a row that continues cannot hold the cursor at its end |
+| Find | byte search per line, ASCII case folding, wraps around the file; matches of the visible lines highlighted (current one stronger) |
+| Modes | Type, Navigate, Find, Review (replace), Save as; Menu, Help and the dialogs are drawn over the mode below. The on-screen keyboard leaves Y, L1, R1 and SELECT to the editor |
+| Recovery | SDL turns SIGTERM into a quit event; SIGHUP is re-raised as SIGTERM. On quit with changes the buffer goes to `edit/recovery/<fnv1a(path) hex>` (first line the path, written atomically); start-up offers Restore or Discard when the first line matches |
+

@@ -15,7 +15,8 @@ keep working.
 - **kennel**: one category at a time, a carousel with large cards, game art and book covers,
   play time and last played, favourites, hidden entries, quick settings (brightness, volume,
   output), power actions, a file browser, battery history, backup to the TF card, wallpaper and
-  accent colours.
+  accent colours. Its image viewer steps through a folder's photos, upright by their EXIF
+  orientation.
 - **Expert mode**: live system status, logs, processes, library diagnostics, sessions, a
   performance overlay.
 - **kennel-read**: a small e-book reader for EPUB, FB2, MOBI/PDB, HTML and plain text. Scrolls by
@@ -24,6 +25,10 @@ keep working.
   and your own fonts in `~/.local/share/kennel/fonts`.
 - **kennel-term**: a terminal for the gamepad. On-screen keyboard, suggestions from your history,
   PATH and the current folder, and a keys mode for `top`, `less`, `vi` or `alsamixer`.
+- **kennel-calc**: a calculator with a basic mode (memory, percent) and a scientific mode
+  (trigonometry, logarithms, powers and roots, factorial, combinations).
+- **kennel-edit**: a text editor with the on-screen keyboard. Word wrap, find and replace, keeps
+  line endings, saves safely and keeps unsaved text when the app is stopped.
 
 Everything is C++20 on SDL3. kennel starts in about half a second on the A23 and draws nothing
 while idle.

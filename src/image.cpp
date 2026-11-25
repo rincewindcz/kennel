@@ -2,12 +2,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
 #define STBI_ONLY_BMP
+#define STBI_ONLY_GIF
 #include "stb_image.h"
 
 #define QOI_IMPLEMENTATION
@@ -17,13 +19,39 @@
 #include "util.h"
 
 namespace {
-constexpr long long kMaxPixels = 16'000'000;
+
+std::string readHead(const std::string& path, size_t max) {
+    std::string out(max, '\0');
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return {};
+    out.resize(fread(out.data(), 1, max, f));
+    fclose(f);
+    return out;
+}
+
+uint32_t be32(const uint8_t* p) { return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }
+
+bool qoiHeader(const std::string& head, int& w, int& h) {
+    if (head.size() < 14 || head.compare(0, 4, "qoif") != 0) return false;
+    auto* p = (const uint8_t*)head.data();
+    w = (int)be32(p + 4);
+    h = (int)be32(p + 8);
+    return w > 0 && h > 0;
+}
+
+}  // namespace
+
+bool imageInfo(const std::string& path, int& w, int& h) {
+    int n;
+    if (qoiHeader(readHead(path, 14), w, h)) return true;
+    return stbi_info(path.c_str(), &w, &h, &n) != 0;
 }
 
 bool loadImage(const std::string& path, Image& out) {
     int w, h, n;
     // Decoding needs w * h * 4 bytes; the device has under 500 MB, so very large images are skipped.
-    if (!stbi_info(path.c_str(), &w, &h, &n) || (long long)w * h > kMaxPixels) return false;
+    if (!imageInfo(path, w, h) || (long long)w * h > kMaxImagePixels) return false;
+    if (qoiHeader(readHead(path, 14), w, h)) return loadQoi(path, out);
     stbi_uc* data = stbi_load(path.c_str(), &w, &h, &n, 4);
     if (!data) return false;
     out.w = w;
@@ -37,7 +65,7 @@ bool loadImageMemory(const std::string& bytes, Image& out) {
     int w, h, n;
     auto* p = (const stbi_uc*)bytes.data();
     int len = (int)bytes.size();
-    if (!stbi_info_from_memory(p, len, &w, &h, &n) || (long long)w * h > kMaxPixels) return false;
+    if (!stbi_info_from_memory(p, len, &w, &h, &n) || (long long)w * h > kMaxImagePixels) return false;
     stbi_uc* data = stbi_load_from_memory(p, len, &w, &h, &n, 4);
     if (!data) return false;
     out.w = w;
@@ -58,6 +86,64 @@ bool loadQoi(const std::string& path, Image& out) {
     out.px.assign((uint8_t*)data, (uint8_t*)data + (size_t)out.w * out.h * 4);
     free(data);
     return true;
+}
+
+int imageOrientation(const std::string& path) {
+    std::string head = readHead(path, 65536);
+    auto* p = (const uint8_t*)head.data();
+    size_t n = head.size();
+    if (n < 4 || p[0] != 0xFF || p[1] != 0xD8) return 1;
+    size_t pos = 2;
+    while (pos + 4 <= n && p[pos] == 0xFF) {
+        uint8_t marker = p[pos + 1];
+        size_t len = (size_t)p[pos + 2] << 8 | p[pos + 3];
+        if (marker == 0xDA || len < 2) break;
+        size_t seg = pos + 4, end = std::min(n, pos + 2 + len);
+        if (marker == 0xE1 && end - seg >= 14 && memcmp(p + seg, "Exif\0\0", 6) == 0) {
+            const uint8_t* t = p + seg + 6;
+            size_t tn = end - seg - 6;
+            bool le = t[0] == 'I' && t[1] == 'I';
+            if (!le && !(t[0] == 'M' && t[1] == 'M')) return 1;
+            auto u16 = [&](size_t o) { return le ? (uint32_t)(t[o] | t[o + 1] << 8) : (uint32_t)(t[o] << 8 | t[o + 1]); };
+            auto u32 = [&](size_t o) { return le ? u16(o) | u16(o + 2) << 16 : u16(o) << 16 | u16(o + 2); };
+            size_t ifd = u32(4);
+            if (ifd + 2 > tn) return 1;
+            uint32_t count = u16(ifd);
+            for (uint32_t i = 0; i < count && ifd + 2 + (i + 1) * 12 <= tn; ++i) {
+                size_t e = ifd + 2 + i * 12;
+                if (u16(e) != 0x0112) continue;
+                uint32_t v = u16(e + 8);
+                return v >= 1 && v <= 8 ? (int)v : 1;
+            }
+            return 1;
+        }
+        pos += 2 + len;
+    }
+    return 1;
+}
+
+void orient(Image& img, int orientation) {
+    if (orientation <= 1 || orientation > 8 || img.empty()) return;
+    bool swap = orientation >= 5;
+    int w = img.w, h = img.h, ow = swap ? h : w, oh = swap ? w : h;
+    std::vector<uint8_t> px((size_t)ow * oh * 4);
+    for (int y = 0; y < oh; ++y)
+        for (int x = 0; x < ow; ++x) {
+            int sx, sy;
+            switch (orientation) {
+                case 2: sx = w - 1 - x, sy = y; break;
+                case 3: sx = w - 1 - x, sy = h - 1 - y; break;
+                case 4: sx = x, sy = h - 1 - y; break;
+                case 5: sx = y, sy = x; break;
+                case 6: sx = y, sy = h - 1 - x; break;
+                case 7: sx = w - 1 - y, sy = h - 1 - x; break;
+                default: sx = w - 1 - y, sy = x; break;
+            }
+            memcpy(&px[((size_t)y * ow + x) * 4], &img.px[((size_t)sy * w + sx) * 4], 4);
+        }
+    img.w = ow;
+    img.h = oh;
+    img.px = std::move(px);
 }
 
 bool saveQoi(const std::string& path, const Image& img) {

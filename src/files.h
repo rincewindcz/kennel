@@ -40,6 +40,7 @@ private:
     void paste();
     void rename();
     void makeFolder();
+    void makeFile();
     void remove();
     void info();
     void runJob(const std::string& label, const std::string& command, const std::string& select);
